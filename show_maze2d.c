@@ -76,7 +76,7 @@ int main(int argc, char **argv)
 /* Initialize OpenGL.  Set our world frame to be the width and height
  * of the maze.
  */
-void init_gl(int maze_height, int maze_width) {
+void init_gl(int maze_width, int maze_height) {
     // Background color.
     glClearColor(1.0, 1.0, 1.0, 1.0) ;
 
@@ -101,7 +101,7 @@ void draw_maze() {
     cell_t* maze_end = get_end(maze) ;
 
     int maze_width = get_ncols(maze) ;
-    int maze_height = get_ncols(maze) ;
+    int maze_height = get_nrows(maze) ;
 
     // Draw the start and end cell.
     glBegin(GL_QUADS) ;
