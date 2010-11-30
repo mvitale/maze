@@ -33,6 +33,12 @@ const int DEFAULT_WIN_HEIGHT = 600;
 int win_width;
 int win_height;
 
+// Viewing data.
+int look_direction ;
+point3_t camera_position ;
+#define EYE_DIR_INCR 5 ;
+#define CAMERA_POSN_INCR .1 ;
+
 // View-volume specification in camera frame basis.
 float view_plane_near = 4.0f;
 float view_plane_far = 100.0f;
