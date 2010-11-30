@@ -41,6 +41,28 @@ float view_plane_far = 100.0f;
 void handle_display(void);
 void handle_resize(int, int);
 
+// Materials and lights.
+typedef struct _material_t {
+	GLfloat ambient[4] ;
+	GLfloat diffuse[4] ;
+	GLfloat specular[4] ;
+	GLfloat phong_exp ;
+} material_t ;
+
+typedef struct _light_t {
+	GLfloat position[4] ;
+	GLfloat color[4] ;
+} light_t ;
+
+GLfloat BLACK[4] = {0.0, 0.0, 0.0, 1.0} ;
+
+material_t blue_plastic = {
+    {0.0f, 0.0f, 1.0f, 1.0f},
+    {0.0f, 0.0f, 1.0f, 1.0f},
+    {1.0f, 1.0f, 1.0f, 1.0f},
+    1000.0f
+} ;
+
 int main(int argc, char **argv) {
     return EXIT_SUCCESS;
 }
