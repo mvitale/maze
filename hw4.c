@@ -27,6 +27,7 @@
 
 #include "geom356.h"
 #include "maze.h"
+#include "debug.h"
 
 // Window data.
 #define DEFAULT_WIN_WIDTH 800
@@ -36,13 +37,15 @@ int win_width;
 int win_height;
 
 // Viewing data.
-int theta ;			
-point3_t camera_position ;
-#define EYE_DIR_INCR 5 ;
-#define CAMERA_POSN_INCR .1 ;
+int theta;          
+point3_t camera_position;
+point3_t look_at = {0.0f, 0.0f, 0.0f};         // Look-at position (world coordinates).
+vector3_t up_dir = {0.0f, 1.0f, 0.0f};             // Up direction.
+#define EYE_DIR_INCR 5;
+#define CAMERA_POSN_INCR .1;
 
 // The maze.
-maze_t *maze ;
+maze_t *maze;
 
 // View-volume specification in camera frame basis.
 float view_plane_near = 4.0f;
@@ -52,46 +55,63 @@ float view_plane_far = 100.0f;
 void handle_display(void);
 void handle_resize(int, int);
 
+// Application functions.
+void init();
+
 // Materials and lights.
 typedef struct _material_t {
-	GLfloat ambient[4] ;
-	GLfloat diffuse[4] ;
-	GLfloat specular[4] ;
-	GLfloat phong_exp ;
-} material_t ;
+	GLfloat ambient[4];
+	GLfloat diffuse[4];
+	GLfloat specular[4];
+	GLfloat phong_exp;
+} material_t;
 
 typedef struct _light_t {
-	GLfloat position[4] ;
-	GLfloat color[4] ;
-} light_t ;
+	GLfloat position[4];
+	GLfloat color[4];
+} light_t;
 
-GLfloat BLACK[4] = {0.0, 0.0, 0.0, 1.0} ;
+GLfloat BLACK[4] = {0.0, 0.0, 0.0, 1.0};
+
+light_t far_light = {
+    {20.0, 10.0, 0.0, 0.0},
+    {0.75, 0.75, 0.75, 1.0}
+};
 
 material_t blue_plastic = {
     {0.0f, 0.0f, 1.0f, 1.0f},
     {0.0f, 0.0f, 1.0f, 1.0f},
     {1.0f, 1.0f, 1.0f, 1.0f},
     1000.0f
-} ;
+};
+
 
 int main(int argc, char **argv) {
 	// Initialize the drawing window.
-	glutInitWindowSize(DEFAULT_WIN_WIDTH, DEFAULT_WIN_HEIGHT) ;
-	glutInitWindowPosition(0, 0) ;
-	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB | GLUT_DEPTH) ;
-	glutInit(&argc, argv) ;
+	glutInitWindowSize(DEFAULT_WIN_WIDTH, DEFAULT_WIN_HEIGHT);
+	glutInitWindowPosition(0, 0);
+	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB | GLUT_DEPTH);
+	glutInit(&argc, argv);
 
 	// Create the main window.
-	glutCreateWindow(WINDOW_TITLE) ;
+	glutCreateWindow(WINDOW_TITLE);
 
-	glutReshapeFunc(handle_resize) ;
-	glutDisplayFunc(handle_display) ;
+	glutReshapeFunc(handle_resize);
+	glutDisplayFunc(handle_display);
 
 	// GL initialization.
-	glEnable(GL_DEPTH_TEST) ;
-	glClearColor(0.0f, 0.0f, 0.0f, 0.0f) ;
+	glEnable(GL_DEPTH_TEST);
+    // glEnable(GL_CULL_FACE);
+    // glCullFace(GL_BACK);
+	glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
-	glutMainLoop() ;
+    // Application initialization.
+    init();
+
+	glutMainLoop();
 
     return EXIT_SUCCESS;
 }
@@ -100,14 +120,15 @@ int main(int argc, char **argv) {
  * and we look in angle theta around the y-axis.
  */
 void set_camera() {
-
-	glMatrixMode(GL_MODELVIEW) ;
-	glLoadIdentity() ;
-
-	// Set the camera transform.
-	glRotatef(-theta, 0.0, 1.0, 0.0) ;
-	glTranslatef(-camera_position.x, -camera_position.y, -camera_position.z) ;
-
+    // Set the camera transform.
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	
+    glRotatef(-theta, 0.0, 1.0, 0.0);
+        glTranslatef(-camera_position.x, -camera_position.y, -camera_position.z);
+    // gluLookAt(camera_position.x, camera_position.y, camera_position.z,
+    //     look_at.x, look_at.y, look_at.z,
+    //     up_dir.x, up_dir.y, up_dir.z);
 }
 
 /** Set the projection and viewport transformations.  We use perspective
@@ -116,16 +137,52 @@ void set_camera() {
  *  screen window.
  */
 void set_projection_viewport() {
-
+    debug("set_projection_viewport");
+    
 	// Set perspective projection transform.
-	glMatrixMode(GL_PROJECTION) ;
-	glLoadIdentity() ;
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
 	gluPerspective(60.0, (GLdouble)win_width/win_height, view_plane_near,
-			view_plane_far) ;
+			view_plane_far);
 
 	// Set the viewport transform.
-	glViewport(0, 0, win_width, win_height) ;	
+	glViewport(0, 0, win_width, win_height);	
+}
 
+/** Set the light colors.  Since the position of the light
+ *  is subject to the current model-view transform, and we have
+ *  specified the light position in world-frame coordinates,
+ *  we want to set the light position after setting the camera
+ *  transformation;since the camera transformation may change in response
+ *  to keyboard events, we ensure this by setting the light position
+ *  in the display callback.
+ *
+ *  It is also easy to "attach" a light to the viewer.  In that case,
+ *  just specify the light position in the camera frame and make sure
+ *  to set its position while the camera transformation is the identity!
+ */
+void set_lights() {
+    debug("set_lights()");
+
+    light_t* light = &far_light;
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, light->color);
+    glLightfv(GL_LIGHT0, GL_AMBIENT, BLACK);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, light->color);
+}
+
+void init() {
+    debug("init");
+
+    // Viewpoint position.
+    theta = 90;
+    camera_position.x = 5.0;
+    camera_position.y = 0.0;
+    camera_position.z = 0.0;
+
+    set_lights();
+    
+    // Set the viewpoint.
+    set_camera();
 }
 
 /** Handle a resize event by recording the new width and height.
@@ -134,18 +191,81 @@ void set_projection_viewport() {
  *  @param height the new height of the window.
  */
 void handle_resize(int width, int height) {
-
     win_width = width;
     win_height = height;
+    
+    set_projection_viewport();
 
     glutPostRedisplay();
+}
+
+void draw_cube() {
+    debug("draw_cube()");
+    
+    // Specify the material for the cube.
+    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, blue_plastic.diffuse);
+    glMaterialfv(GL_FRONT, GL_SPECULAR, blue_plastic.specular);
+    glMaterialf(GL_FRONT, GL_SHININESS, blue_plastic.phong_exp);
+
+    // Draw cube as a sequence of GL_QUADS.
+    glBegin(GL_QUADS);
+
+    // z=1 plane.
+    glNormal3f(0.0, 0.0, 1.0);
+    glVertex3f(-1.0, -1.0, 1.0);
+    glVertex3f(1.0, -1.0, 1.0);
+    glVertex3f(1.0, 1.0, 1.0);
+    glVertex3f(-1.0, 1.0, 1.0);
+    
+    // z=-1 plane.
+    glNormal3f(0.0, 0.0, -1.0);
+    glVertex3f(-1.0, -1.0, -1.0);
+    glVertex3f(-1.0, 1.0, -1.0);
+    glVertex3f(1.0, 1.0, -1.0);
+    glVertex3f(1.0, -1.0, -1.0);
+
+    // x=1 plane.
+    glNormal3f(1.0, 0.0, 0.0);
+    glVertex3f(1.0, -1.0, 1.0);
+    glVertex3f(1.0, -1.0, -1.0);
+    glVertex3f(1.0, 1.0, -1.0);
+    glVertex3f(1.0, 1.0, 1.0);
+
+    // x=-1 plane.
+    glNormal3f(-1.0, 0.0, 0.0);
+    glVertex3f(-1.0, -1.0, 1.0);
+    glVertex3f(-1.0, 1.0, 1.0);
+    glVertex3f(-1.0, 1.0, -1.0);
+    glVertex3f(-1.0, -1.0, -1.0);
+
+    // y=1 plane.
+    glNormal3f(0.0, 1.0, 0.0);
+    glVertex3f(-1.0, 1.0, 1.0);
+    glVertex3f(1.0, 1.0, 1.0);
+    glVertex3f(1.0, 1.0, -1.0);
+    glVertex3f(-1.0, 1.0, -1.0);
+
+    // y=-1 plane.
+    glNormal3f(0.0, -1.0, 0.0);
+    glVertex3f(-1.0, -1.0, 1.0);
+    glVertex3f(-1.0, -1.0, -1.0);
+    glVertex3f(1.0, -1.0, -1.0);
+    glVertex3f(1.0, -1.0, 1.0);
+
+    glEnd();
 }
 
 /** Handle a display request by clearing the screen.
  */
 void handle_display() {
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
 
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT ) ;
-
-    glFlush() ;
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    // Keep cube at origin for now.
+    glTranslatef(0.0, 0.0, 0.0);
+    draw_cube();
+    glPopMatrix();
+    
+    glFlush();
 }
