@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #ifdef __MACOSX__
 #include <OpenGL/gl.h>
@@ -58,6 +59,7 @@ void handle_special_key(int, int, int);
 
 // Application functions.
 void init();
+void initialize_maze(int, int);
 
 // Materials and lights.
 typedef struct _material_t {
@@ -110,6 +112,11 @@ int main(int argc, char **argv) {
     glEnable(GL_LIGHT0);
     glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+	
+	// Initialize the maze.
+	int maze_width = atoi(argv[1]);
+	int maze_height = atoi(argv[2]);
+	initialize_maze(maze_height, maze_width);
 
     // Application initialization.
     init();
@@ -156,6 +163,14 @@ void handle_special_key(int key, int x, int y) {
 	}
 	set_camera();
 	glutPostRedisplay();
+}
+
+/*  Initialize the maze by building all possible walls.
+ */
+void initialize_maze(int maze_height, int maze_width) {
+
+    maze = make_maze(maze_height, maze_width, time(NULL)) ;
+
 }
 
 /** Set the projection and viewport transformations.  We use perspective
