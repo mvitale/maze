@@ -48,7 +48,7 @@ vector3_t up_dir = {0.0f, 1.0f, 0.0f};             // Up direction.
 maze_t *maze;
 
 // View-volume specification in camera frame basis.
-float view_plane_near = 4.0f;
+float view_plane_near = 1.0f;
 float view_plane_far = 100.0f;
 
 // Callbacks.
@@ -237,6 +237,7 @@ void draw_cube() {
     // Draw cube as a sequence of GL_QUADS.
     glBegin(GL_QUADS);
 
+
     // z=1 plane.
     glNormal3f(0.0, 0.0, 1.0);
     glVertex3f(-1.0, -1.0, 1.0);
@@ -285,7 +286,7 @@ void draw_cube() {
 /** Handle a display request by clearing the screen.
  */
 void handle_display() {
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glMatrixMode(GL_MODELVIEW);
     glPushMatrix();
