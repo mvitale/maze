@@ -41,7 +41,7 @@ int theta;
 point3_t camera_position;
 point3_t look_at = {0.0f, 0.0f, 0.0f};         // Look-at position (world coordinates).
 vector3_t up_dir = {0.0f, 1.0f, 0.0f};             // Up direction.
-#define EYE_DIR_INCR 5;
+#define EYE_THETA_INCR 10;
 #define CAMERA_POSN_INCR .1;
 
 // The maze.
@@ -54,6 +54,7 @@ float view_plane_far = 100.0f;
 // Callbacks.
 void handle_display(void);
 void handle_resize(int, int);
+void handle_special_key(int, int, int);
 
 // Application functions.
 void init();
@@ -96,8 +97,10 @@ int main(int argc, char **argv) {
 	// Create the main window.
 	glutCreateWindow(WINDOW_TITLE);
 
+	// Set callbacks.
 	glutReshapeFunc(handle_resize);
 	glutDisplayFunc(handle_display);
+	glutSpecialFunc(handle_special_key);
 
 	// GL initialization.
 	glEnable(GL_DEPTH_TEST);
@@ -124,8 +127,35 @@ void set_camera() {
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 	
-    glRotatef(-theta, 0.0, 1.0, 0.0);
+    glRotatef(360-theta, 0.0, 1.0, 0.0);
     glTranslatef(-camera_position.x, -camera_position.y, -camera_position.z);
+}
+
+void handle_special_key(int key, int x, int y) {
+	switch (key) {
+		case GLUT_KEY_LEFT:
+			theta += EYE_THETA_INCR;
+			if (theta > 360) theta -= 360;
+			break;
+		case GLUT_KEY_RIGHT:
+			theta -= EYE_THETA_INCR;
+			if (theta < 360) theta += 360;
+			break;
+		/**
+		case GLUT_KEY_UP:
+			camera_position.x += CAMERA_POSN_INCR*cos(theta);
+			camera_position.z += CAMERA_POSN_INCR*sin(theta);
+			break;
+		case GLUT_KEY_DOWN:
+			camera_position.x -= CAMERA_POSN_INCR*cos(theta);
+			camera_position.z -= CAMERA_POSN_INCR*sin(theta);
+			break;
+		*/
+		default:
+			break;
+	}
+	set_camera();
+	glutPostRedisplay();
 }
 
 /** Set the projection and viewport transformations.  We use perspective
