@@ -125,10 +125,7 @@ void set_camera() {
 	glLoadIdentity();
 	
     glRotatef(-theta, 0.0, 1.0, 0.0);
-        glTranslatef(-camera_position.x, -camera_position.y, -camera_position.z);
-    // gluLookAt(camera_position.x, camera_position.y, camera_position.z,
-    //     look_at.x, look_at.y, look_at.z,
-    //     up_dir.x, up_dir.y, up_dir.z);
+    glTranslatef(-camera_position.x, -camera_position.y, -camera_position.z);
 }
 
 /** Set the projection and viewport transformations.  We use perspective
