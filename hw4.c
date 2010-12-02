@@ -141,7 +141,6 @@ void handle_special_key(int key, int x, int y) {
 			theta -= EYE_THETA_INCR;
 			if (theta < 360) theta += 360;
 			break;
-		/**
 		case GLUT_KEY_UP:
 			camera_position.x += CAMERA_POSN_INCR*cos(theta);
 			camera_position.z += CAMERA_POSN_INCR*sin(theta);
@@ -150,7 +149,6 @@ void handle_special_key(int key, int x, int y) {
 			camera_position.x -= CAMERA_POSN_INCR*cos(theta);
 			camera_position.z -= CAMERA_POSN_INCR*sin(theta);
 			break;
-		*/
 		default:
 			break;
 	}
