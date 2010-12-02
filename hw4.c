@@ -49,6 +49,8 @@ vector3_t up_dir = {0.0f, 1.0f, 0.0f};             // Up direction.
 
 // The maze.
 maze_t *maze;
+int maze_width;
+int maze_height;
 
 // View-volume specification in camera frame basis.
 float view_plane_near = 1.0f;
@@ -61,7 +63,10 @@ void handle_special_key(int, int, int);
 
 // Application functions.
 void init();
-void initialize_maze(int, int);
+void initialize_maze();
+void draw_wall();
+void draw_cube();
+void draw_maze();
 
 // Materials and lights.
 typedef struct _material_t {
@@ -116,9 +121,9 @@ int main(int argc, char **argv) {
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	
 	// Initialize the maze.
-	int maze_width = atoi(argv[1]);
-	int maze_height = atoi(argv[2]);
-	initialize_maze(maze_height, maze_width);
+	maze_width = (GLfloat)atoi(argv[1]);
+	maze_height = (GLfloat)atoi(argv[2]);
+	initialize_maze();
 
     // Application initialization.
     init();
@@ -167,7 +172,7 @@ void handle_special_key(int key, int x, int y) {
 
 /*  Initialize the maze by building all possible walls.
  */
-void initialize_maze(int maze_height, int maze_width) {
+void initialize_maze() {
 
     maze = make_maze(maze_height, maze_width, time(NULL)) ;
 
@@ -216,10 +221,12 @@ void init() {
     debug("init");
 
     // Viewpoint position.
-    theta = 180;
-    camera_position.x = 5.0;
-    camera_position.y = 0.0;
-    camera_position.z = 0.0;
+    theta = 0;
+	cell_t *start = get_start(maze);
+
+    camera_position.x = start->c+0.5;
+    camera_position.y = 0.75;
+    camera_position.z = start->r+0.5;
 
     set_lights();
     
@@ -298,18 +305,121 @@ void draw_cube() {
     glEnd();
 }
 
+/** Draw a canonical rectangular solid of length 1, height 1, and width .25
+ * along the x-axis centered at the origin.
+ */
+void draw_wall() {
+	debug("draw_wall()");
+	
+    // Specify the material for the wall.
+    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, blue_plastic.diffuse);
+    glMaterialfv(GL_FRONT, GL_SPECULAR, blue_plastic.specular);
+    glMaterialf(GL_FRONT, GL_SHININESS, blue_plastic.phong_exp);
+
+	// Draw the wall as a sequence of GL_QUADS
+	glBegin(GL_QUADS);
+
+	// x=.5 plane
+	glNormal3f(1.0, 0.0, 0.0);
+	glVertex3f(0.5, -0.5, -0.125);
+	glVertex3f(0.5, 0.5, -0.125);
+	glVertex3f(0.5, 0.5, 0.125);
+	glVertex3f(0.5, -0.5, 0.125);
+	
+	// x=-.5 plane
+	glNormal3f(-1.0, 0.0, 0.0);
+	glVertex3f(-0.5, -0.5, -0.125);
+	glVertex3f(-0.5, 0.5, -0.125);
+	glVertex3f(-0.5, 0.5, 0.125);
+	glVertex3f(-0.5, -0.5, 0.125);
+	
+	// y=.5 plane
+	glNormal3f(0.0, 1.0, 0.0);
+	glVertex3f(0.5, 0.5, -0.125);
+	glVertex3f(-0.5, 0.5, -0.125);
+	glVertex3f(-0.5, 0.5, 0.125);
+	glVertex3f(0.5, 0.5, 0.125);
+	
+	
+	// y=-.5 plane
+	glNormal3f(0.0, -1.0, 0.0);
+	glVertex3f(0.5, -0.5, -0.125);
+	glVertex3f(-0.5, -0.5, -0.125);
+	glVertex3f(-0.5, -0.5, 0.125);
+	glVertex3f(0.5, -0.5, 0.125);
+
+	
+	// z=.125 plane
+	glNormal3f(0.0, 0.0, 1.0);
+	glVertex3f(0.5, -0.5, 0.125);
+	glVertex3f(0.5, 0.5, 0.125);
+	glVertex3f(-0.5, 0.5, 0.125);
+	glVertex3f(-0.5, -0.5, 0.125);
+
+
+	// z=-.125 plane
+	glNormal3f(0.0, 0.0, -1.0);
+	glVertex3f(0.5, -0.5, -0.125);
+	glVertex3f(0.5, 0.5, -0.125);
+	glVertex3f(-0.5, 0.5, -0.125);
+	glVertex3f(-0.5, -0.5, -0.125);
+
+	glEnd();
+}
+
+/** Draw the coordinate axes as line segments from -100 to +100 along
+ *  the corresponding axis.
+ */
+void draw_axes() {
+    glBegin(GL_LINES) ;
+    glColor3f(0.0, 0.0, 1.0) ;
+    glVertex3f(0.0f, 0.0f, -100.0f) ;
+    glVertex3f(0.0f, 0.0f, 100.0f) ;
+    glColor3f(1.0, 0.0, 0.0) ;
+    glVertex3f(-100.0f, 0.0f, 0.0f) ;
+    glVertex3f(100.0f, 0.0f, 0.0f) ;
+    glColor3f(0.0, 1.0, 0.0) ;
+    glVertex3f(0.0f, -100.0f, 0.0f) ;
+    glVertex3f(0.0f, 100.0f, 0.0f) ;
+    glEnd() ;
+}
+
+/** Draw the maze by first drawing the west and south exterior walls, then
+ * drawing any north or east walls of each cell.
+ */
+void draw_maze() {
+
+	// Draw the west and south exterior walls.
+	glMatrixMode(GL_MODELVIEW);
+	glEnable(GL_NORMALIZE);
+	glPushMatrix();
+	glTranslatef(2.5*maze_height, 0.5, 0.125);
+	glScalef(5.0*maze_height, 1.0, 1.0);
+	draw_wall();
+	glPopMatrix();
+	glPushMatrix();
+	glTranslatef(.125, 0.5, 2.5*maze_width);
+	glScalef(1.0, 1.0, 5.0*maze_width);
+	glRotatef(90, 0.0, 1.0, 0.0);
+	draw_wall();
+	glPopMatrix();
+	glDisable(GL_NORMALIZE);
+}
+	
 
 /** Handle a display request by clearing the screen.
  */
 void handle_display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
+    //glMatrixMode(GL_MODELVIEW);
+    //glPushMatrix();
     // Keep cube at origin for now.
-    glTranslatef(0.0, 0.0, 0.0);
-    draw_cube();
-    glPopMatrix();
+    //glTranslatef(0.0, 0.0, 0.0);
+    //draw_cube();
+    //glPopMatrix();
+	draw_axes();
+	draw_maze();
     
     glFlush();
 }
