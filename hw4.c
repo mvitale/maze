@@ -26,10 +26,12 @@
 #endif
 
 #include "geom356.h"
+#include "maze.h"
 
 // Window data.
-const int DEFAULT_WIN_WIDTH = 800;
-const int DEFAULT_WIN_HEIGHT = 600;
+#define DEFAULT_WIN_WIDTH 800
+#define DEFAULT_WIN_HEIGHT 600
+#define WINDOW_TITLE "3D maze"
 int win_width;
 int win_height;
 
@@ -38,6 +40,9 @@ int theta ;
 point3_t camera_position ;
 #define EYE_DIR_INCR 5 ;
 #define CAMERA_POSN_INCR .1 ;
+
+// The maze.
+maze_t *maze ;
 
 // View-volume specification in camera frame basis.
 float view_plane_near = 4.0f;
@@ -77,7 +82,7 @@ int main(int argc, char **argv) {
 	glutInit(&argc, argv) ;
 
 	// Create the main window.
-	glutCreateWindow("Maze") ;
+	glutCreateWindow(WINDOW_TITLE) ;
 
 	glutReshapeFunc(handle_resize) ;
 	glutDisplayFunc(handle_display) ;
@@ -89,6 +94,38 @@ int main(int argc, char **argv) {
 	glutMainLoop() ;
 
     return EXIT_SUCCESS;
+}
+
+/** Set the camera transform. The viewpoint is given by the eye coordinates,
+ * and we look in angle theta around the y-axis.
+ */
+void set_camera() {
+
+	glMatrixMode(GL_MODELVIEW) ;
+	glLoadIdentity() ;
+
+	// Set the camera transform.
+	glRotatef(-theta, 0.0, 1.0, 0.0) ;
+	glTranslatef(-camera_position.x, -camera_position.y, -camera_position.z) ;
+
+}
+
+/** Set the projection and viewport transformations.  We use perspective
+ *  projection and always match the aspect ratio of the screen window
+ *  with vertical field-of-view 60 degrees and always map to the entire
+ *  screen window.
+ */
+void set_projection_viewport() {
+
+	// Set perspective projection transform.
+	glMatrixMode(GL_PROJECTION) ;
+	glLoadIdentity() ;
+	gluPerspective(60.0, (GLdouble)win_width/win_height, view_plane_near,
+			view_plane_far) ;
+
+	// Set the viewport transform.
+	glViewport(0, 0, win_width, win_height) ;	
+
 }
 
 /** Handle a resize event by recording the new width and height.
