@@ -136,7 +136,7 @@ void set_camera() {
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
 	
-    glRotatef(360-theta, 0.0, 1.0, 0.0);
+    glRotatef(360-(theta-90), 0.0, 1.0, 0.0);
     glTranslatef(-camera_position.x, -camera_position.y, -camera_position.z);
 }
 
@@ -151,12 +151,12 @@ void handle_special_key(int key, int x, int y) {
 			if (theta < 0) theta += 360;
 			break;
 		case GLUT_KEY_UP:
-			camera_position.x += CAMERA_POSN_INCR * cos(D2R(theta + 90));
-			camera_position.z += CAMERA_POSN_INCR * sin(D2R(theta - 90));
+			camera_position.x += CAMERA_POSN_INCR * cos(D2R(theta));
+			camera_position.z += CAMERA_POSN_INCR * sin(D2R(-theta));
 			break;
 		case GLUT_KEY_DOWN:
-			camera_position.x -= CAMERA_POSN_INCR * cos(D2R(theta + 90));
-			camera_position.z -= CAMERA_POSN_INCR * sin(D2R(theta - 90));
+			camera_position.x -= CAMERA_POSN_INCR * cos(D2R(theta));
+			camera_position.z -= CAMERA_POSN_INCR * sin(D2R(-theta));
 			break;
 		default:
 			break;
@@ -216,7 +216,7 @@ void init() {
     debug("init");
 
     // Viewpoint position.
-    theta = 90;
+    theta = 180;
     camera_position.x = 5.0;
     camera_position.y = 0.0;
     camera_position.z = 0.0;
@@ -297,6 +297,7 @@ void draw_cube() {
 
     glEnd();
 }
+
 
 /** Handle a display request by clearing the screen.
  */
