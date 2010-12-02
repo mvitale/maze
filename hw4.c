@@ -42,8 +42,10 @@ int theta;
 point3_t camera_position;
 point3_t look_at = {0.0f, 0.0f, 0.0f};         // Look-at position (world coordinates).
 vector3_t up_dir = {0.0f, 1.0f, 0.0f};             // Up direction.
-#define EYE_THETA_INCR 10;
-#define CAMERA_POSN_INCR .1;
+#define EYE_THETA_INCR 10
+#define CAMERA_POSN_INCR 0.1
+
+#define D2R(x) ((x)*M_PI/180.0)
 
 // The maze.
 maze_t *maze;
@@ -146,18 +148,16 @@ void handle_special_key(int key, int x, int y) {
 			break;
 		case GLUT_KEY_RIGHT:
 			theta -= EYE_THETA_INCR;
-			if (theta < 360) theta += 360;
+			if (theta < 0) theta += 360;
 			break;
-		/**
 		case GLUT_KEY_UP:
-			camera_position.x += CAMERA_POSN_INCR*cos(theta);
-			camera_position.z += CAMERA_POSN_INCR*sin(theta);
+			camera_position.x += CAMERA_POSN_INCR * cos(D2R(theta + 90));
+			camera_position.z += CAMERA_POSN_INCR * sin(D2R(theta - 90));
 			break;
 		case GLUT_KEY_DOWN:
-			camera_position.x -= CAMERA_POSN_INCR*cos(theta);
-			camera_position.z -= CAMERA_POSN_INCR*sin(theta);
+			camera_position.x -= CAMERA_POSN_INCR * cos(D2R(theta + 90));
+			camera_position.z -= CAMERA_POSN_INCR * sin(D2R(theta - 90));
 			break;
-		*/
 		default:
 			break;
 	}
