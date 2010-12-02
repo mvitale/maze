@@ -25,7 +25,7 @@
 #include <GL/glut.h>
 #endif
 
-#include "debug.h"
+#include "geom356.h"
 
 // Window data.
 const int DEFAULT_WIN_WIDTH = 800;
@@ -34,7 +34,7 @@ int win_width;
 int win_height;
 
 // Viewing data.
-int look_direction ;
+int theta ;			
 point3_t camera_position ;
 #define EYE_DIR_INCR 5 ;
 #define CAMERA_POSN_INCR .1 ;
@@ -70,6 +70,24 @@ material_t blue_plastic = {
 } ;
 
 int main(int argc, char **argv) {
+	// Initialize the drawing window.
+	glutInitWindowSize(DEFAULT_WIN_WIDTH, DEFAULT_WIN_HEIGHT) ;
+	glutInitWindowPosition(0, 0) ;
+	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB | GLUT_DEPTH) ;
+	glutInit(&argc, argv) ;
+
+	// Create the main window.
+	glutCreateWindow("Maze") ;
+
+	glutReshapeFunc(handle_resize) ;
+	glutDisplayFunc(handle_display) ;
+
+	// GL initialization.
+	glEnable(GL_DEPTH_TEST) ;
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f) ;
+
+	glutMainLoop() ;
+
     return EXIT_SUCCESS;
 }
 
@@ -79,7 +97,6 @@ int main(int argc, char **argv) {
  *  @param height the new height of the window.
  */
 void handle_resize(int width, int height) {
-    debug("handle_resize(%d, %d)\n", width, height);
 
     win_width = width;
     win_height = height;
@@ -90,7 +107,6 @@ void handle_resize(int width, int height) {
 /** Handle a display request by clearing the screen.
  */
 void handle_display() {
-    debug("handle_display()") ;
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT ) ;
 
