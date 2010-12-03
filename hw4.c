@@ -40,8 +40,6 @@ int win_height;
 // Viewing data.
 int theta;          
 point3_t camera_position;
-point3_t look_at = {0.0f, 0.0f, 0.0f};         // Look-at position (world coordinates).
-vector3_t up_dir = {0.0f, 1.0f, 0.0f};             // Up direction.
 #define EYE_THETA_INCR 5
 #define CAMERA_POSN_INCR 0.1
 
@@ -97,6 +95,7 @@ material_t blue_plastic = {
 
 
 int main(int argc, char **argv) {
+
 	// Initialize the drawing window.
 	glutInitWindowSize(DEFAULT_WIN_WIDTH, DEFAULT_WIN_HEIGHT);
 	glutInitWindowPosition(0, 0);
@@ -111,22 +110,15 @@ int main(int argc, char **argv) {
 	glutDisplayFunc(handle_display);
 	glutSpecialFunc(handle_special_key);
 
-	// GL initialization.
-	glEnable(GL_DEPTH_TEST);
-    // glEnable(GL_CULL_FACE);
-    // glCullFace(GL_BACK);
-	glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0);
-    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
-	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-	
-	// Initialize the maze.
+	// Parse the width/height of the maze to render.	
 	maze_width = atoi(argv[1]);
 	maze_height = atoi(argv[2]);
-	initialize_maze();
 
     // Application initialization.
     init();
+
+	// GL initialization.
+	gl_init()
 
 	glutMainLoop();
 
@@ -217,10 +209,15 @@ void set_lights() {
     glLightfv(GL_LIGHT0, GL_SPECULAR, light->color);
 }
 
+/** Set data necessary to initialize the application.
+ */
 void init() {
     debug("init");
 
-    // Viewpoint position.
+	// Create the maze.
+	initialize_maze();
+
+    // Set the starting camera configuration.
     theta = 0;
 	cell_t *start = get_start(maze);
 
@@ -228,10 +225,24 @@ void init() {
     camera_position.y = 0.0;
     camera_position.z = start->r+0.5;
 
+	// Set the lights.
     set_lights();
-    
+
     // Set the viewpoint.
     set_camera();
+}
+
+/** Set necessary gl initialization data.
+ */
+void gl_init() {
+
+	glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
+	glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
 /** Handle a resize event by recording the new width and height.
