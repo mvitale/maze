@@ -93,6 +93,19 @@ material_t blue_plastic = {
     1000.0f
 };
 
+material_t green_plastic = {
+	{0.0f, 1.0f, 0.0f, 1.0f},
+	{0.0f, 1.0f, 0.0f, 1.0f},
+	{1.0f, 1.0f, 1.0f, 1.0f},
+	1000.0f
+};
+
+material_t red_plastic = {
+	{1.0f, 0.0f, 0.0f, 1.0f},
+	{1.0f, 0.0f, 0.0f, 1.0f},
+	{1.0f, 1.0f, 1.0f, 1.0f},
+	1000.0f
+};
 
 int main(int argc, char **argv) {
 	// Initialize the drawing window.
@@ -215,9 +228,10 @@ void set_lights() {
 }
 
 void init() {
-    debug("init");
+    debug("init()");
 
 	initialize_maze();
+
     // Viewpoint position.
     theta = 0;
 	cell_t *start = get_start(maze);
@@ -365,6 +379,29 @@ void draw_wall() {
 	glEnd();
 }
 
+/** Draw a sqaure of side length 2 in the xz plane centered at the origin
+ */
+void draw_square(material_t *material) {
+
+	debug("draw_square()");
+
+	// Specify the material for the square.
+	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, material->diffuse);
+	glMaterialfv(GL_FRONT, GL_SPECULAR, material->specular);
+	glMaterialf(GL_FRONT, GL_SHININESS, material->phong_exp);
+
+	// Draw the square.
+	glBegin(GL_QUADS);
+
+	glNormal3f(0.0, 1.0, 0.0);
+	glVertex3f(1.0, 0.0, -1.0);
+	glVertex3f(-1.0, 0.0, -1.0);
+	glVertex3f(-1.0, 0.0, 1.0);
+	glVertex3f(1.0, 0.0, 1.0);
+
+	glEnd();
+}
+
 /** Draw the coordinate axes as line segments from -100 to +100 along
  *  the corresponding axis.
  */
@@ -388,11 +425,30 @@ void draw_axes() {
 void draw_maze() {
 
 	debug("draw_maze()");
+	
+	glMatrixMode(GL_MODELVIEW);
 
+	// Draw a green square on the floor of the start cell and a red one on
+	// the floor of the end cell.
+	cell_t *start = get_start(maze);
+	cell_t *end = get_end(maze);
+
+	glPushMatrix();
+	glTranslatef(start->c+0.5, 0.0, start->r+0.5);
+	glScalef(0.5, 0.0, 0.5);
+	draw_square(&green_plastic);
+	glPopMatrix();
+	
+	glPushMatrix();
+	glTranslatef(end->c+0.5, 0.0, end->r+0.5);
+	glScalef(0.5, 0.0, 0.5);
+	draw_square(&red_plastic);
+	glPopMatrix();
+
+	
 	// Draw the west and south exterior walls. We enable GL_NORMALIZE
 	// to ensure that scaled walls have unit-length surface normals, then
 	// disable it since we won't be doing any more scaling.
-	glMatrixMode(GL_MODELVIEW);
 	glEnable(GL_NORMALIZE);
 	glPushMatrix();
 	glTranslatef(maze_height/2.0, 0.5, 0.0);
@@ -417,7 +473,6 @@ void draw_maze() {
 				draw_wall();
 				glPopMatrix();
 			}
-
 			if (has_wall(maze, get_cell(maze, j, i), EAST)) {
 				glPushMatrix();
 				glTranslatef(j+0.5, 0.5, i+1);
