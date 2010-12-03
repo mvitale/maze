@@ -42,7 +42,7 @@ int theta;
 point3_t camera_position;
 point3_t look_at = {0.0f, 0.0f, 0.0f};         // Look-at position (world coordinates).
 vector3_t up_dir = {0.0f, 1.0f, 0.0f};             // Up direction.
-#define EYE_THETA_INCR 10
+#define EYE_THETA_INCR 5
 #define CAMERA_POSN_INCR 0.1
 
 #define D2R(x) ((x)*M_PI/180.0)
@@ -53,7 +53,7 @@ int maze_width;
 int maze_height;
 
 // View-volume specification in camera frame basis.
-float view_plane_near = 1.0f;
+float view_plane_near = 0.1f;
 float view_plane_far = 100.0f;
 
 // Callbacks.
@@ -121,8 +121,8 @@ int main(int argc, char **argv) {
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	
 	// Initialize the maze.
-	maze_width = (GLfloat)atoi(argv[1]);
-	maze_height = (GLfloat)atoi(argv[2]);
+	maze_width = atoi(argv[1]);
+	maze_height = atoi(argv[2]);
 	initialize_maze();
 
     // Application initialization.
@@ -225,7 +225,7 @@ void init() {
 	cell_t *start = get_start(maze);
 
     camera_position.x = start->c+0.5;
-    camera_position.y = 0.75;
+    camera_position.y = 0.0;
     camera_position.z = start->r+0.5;
 
     set_lights();
@@ -389,20 +389,46 @@ void draw_axes() {
  */
 void draw_maze() {
 
-	// Draw the west and south exterior walls.
+	debug("draw_maze()");
+
+	// Draw the west and south exterior walls. We enable GL_NORMALIZE
+	// to ensure that scaled walls have unit-length surface normals, then
+	// disable it since we won't be doing any more scaling.
 	glMatrixMode(GL_MODELVIEW);
 	glEnable(GL_NORMALIZE);
 	glPushMatrix();
-	glTranslatef(2.5*maze_height, 0.5, 0.125);
-	glScalef(5.0*maze_height, 1.0, 1.0);
+	glTranslatef(maze_height/2.0, 0.0, 0.0);
+	glScalef(maze_height+0.25, 1.0, 1.0);
 	draw_wall();
 	glPopMatrix();
 	glPushMatrix();
-	glTranslatef(.125, 0.5, 2.5*maze_width);
-	glScalef(1.0, 1.0, 5.0*maze_width);
+	glTranslatef(0.0, 0.0, maze_width/2.0);
+	glScalef(1.0, 1.0, maze_width+0.25);
 	glRotatef(90, 0.0, 1.0, 0.0);
 	draw_wall();
 	glPopMatrix();
+
+	// Draw any north or east walls of each cell.
+	for (int i=0; i<maze_width; i++) {
+		for (int j=0; j<maze_height; j++) {
+			if (has_wall(maze, get_cell(maze, j, i), NORTH)) {
+				glPushMatrix();
+				glTranslatef(j+1, 0.0, i+0.5);
+				glScalef(1.0, 1.0, 1.25);
+				glRotatef(90, 0.0, 1.0, 0.0);
+				draw_wall();
+				glPopMatrix();
+			}
+
+			if (has_wall(maze, get_cell(maze, j, i), EAST)) {
+				glPushMatrix();
+				glTranslatef(j+0.5, 0.0, i+1);
+				glScalef(1.25, 1.0, 1.0);
+				draw_wall();
+				glPopMatrix();
+			}
+		}
+	}
 	glDisable(GL_NORMALIZE);
 }
 	
