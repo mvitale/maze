@@ -121,7 +121,6 @@ int main(int argc, char **argv) {
 	// Initialize the maze.
 	maze_width = atoi(argv[1]);
 	maze_height = atoi(argv[2]);
-	initialize_maze();
 
     // Application initialization.
     init();
@@ -218,12 +217,13 @@ void set_lights() {
 void init() {
     debug("init");
 
+	initialize_maze();
     // Viewpoint position.
     theta = 0;
 	cell_t *start = get_start(maze);
 
     camera_position.x = start->c+0.5;
-    camera_position.y = 0.0;
+    camera_position.y = 0.75;
     camera_position.z = start->r+0.5;
 
     set_lights();
@@ -395,12 +395,12 @@ void draw_maze() {
 	glMatrixMode(GL_MODELVIEW);
 	glEnable(GL_NORMALIZE);
 	glPushMatrix();
-	glTranslatef(maze_height/2.0, 0.0, 0.0);
+	glTranslatef(maze_height/2.0, 0.5, 0.0);
 	glScalef(maze_height+0.25, 1.0, 1.0);
 	draw_wall();
 	glPopMatrix();
 	glPushMatrix();
-	glTranslatef(0.0, 0.0, maze_width/2.0);
+	glTranslatef(0.0, 0.5, maze_width/2.0);
 	glScalef(1.0, 1.0, maze_width+0.25);
 	glRotatef(90, 0.0, 1.0, 0.0);
 	draw_wall();
@@ -411,7 +411,7 @@ void draw_maze() {
 		for (int j=0; j<maze_height; j++) {
 			if (has_wall(maze, get_cell(maze, j, i), NORTH)) {
 				glPushMatrix();
-				glTranslatef(j+1, 0.0, i+0.5);
+				glTranslatef(j+1, 0.5, i+0.5);
 				glScalef(1.0, 1.0, 1.25);
 				glRotatef(90, 0.0, 1.0, 0.0);
 				draw_wall();
@@ -420,7 +420,7 @@ void draw_maze() {
 
 			if (has_wall(maze, get_cell(maze, j, i), EAST)) {
 				glPushMatrix();
-				glTranslatef(j+0.5, 0.0, i+1);
+				glTranslatef(j+0.5, 0.5, i+1);
 				glScalef(1.25, 1.0, 1.0);
 				draw_wall();
 				glPopMatrix();
