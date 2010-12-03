@@ -67,6 +67,8 @@ void initialize_maze();
 void draw_wall();
 void draw_cube();
 void draw_maze();
+void draw_string(char*);
+void print_position_heading();
 
 // Materials and lights.
 typedef struct _material_t {
@@ -197,7 +199,7 @@ void handle_special_key(int key, int x, int y) {
 	switch (key) {
 		case GLUT_KEY_LEFT:
 			theta += EYE_THETA_INCR;
-			if (theta > 360) theta -= 360;
+			if (theta >= 360) theta -= 360;
 			break;
 		case GLUT_KEY_RIGHT:
 			theta -= EYE_THETA_INCR;
@@ -523,6 +525,36 @@ void draw_maze() {
 	glDisable(GL_NORMALIZE);
 }
 	
+/* Draw a provided string at the current raster position.
+ * 
+ * Parameters:
+ *		the_string - The string to display.
+ */
+void draw_string(char *the_string) {
+	
+	for (int i=0; i<strlen(the_string); i++) {
+		glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, the_string[i]);
+	}
+}
+
+/** Print the position (camera_position) and heading (theta) of the player.
+ */
+void print_position_heading() {
+	debug("print_position_heading()");
+	glColor3f(1.0f, 1.0f, 1.0f);
+
+	glWindowPos2s(10, 30);
+	char *s;
+	asprintf(&s, "Location: (%f, %f, %f)", camera_position.x, 
+			camera_position.y, camera_position.z);
+	draw_string(s);
+	free(s);
+
+	glWindowPos2s(10, 10);
+	asprintf(&s, "Heading: %d", theta);
+	draw_string(s);
+	free(s);
+}
 
 /** Handle a display request by clearing the screen.
  */
@@ -537,6 +569,9 @@ void handle_display() {
     //glPopMatrix();
 	draw_axes();
 	draw_maze();
-    
+
+	// Display the player's position and heading.
+	print_position_heading();
+
     glFlush();
 }
