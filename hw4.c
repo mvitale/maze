@@ -42,6 +42,7 @@ int theta;
 point3_t camera_position;
 #define EYE_THETA_INCR 5
 #define CAMERA_POSN_INCR 0.1
+bool top_view = false;
 
 #define D2R(x) ((x)*M_PI/180.0)
 
@@ -57,6 +58,7 @@ float view_plane_far = 100.0f;
 // Callbacks.
 void handle_display(void);
 void handle_resize(int, int);
+void handle_key(unsigned char, int, int);
 void handle_special_key(int, int, int);
 
 // Application functions.
@@ -120,6 +122,7 @@ int main(int argc, char **argv) {
 	// Set callbacks.
 	glutReshapeFunc(handle_resize);
 	glutDisplayFunc(handle_display);
+	glutKeyboardFunc(handle_key);
 	glutSpecialFunc(handle_special_key);
 
 	// GL initialization.
@@ -155,6 +158,41 @@ void set_camera() {
     glTranslatef(-camera_position.x, -camera_position.y, -camera_position.z);
 }
 
+/** Handle keyboard events:
+ *  
+ *  - SPACE:  Jump to top view if not already in top view. Otherwise,
+ *            return to normal first person view.
+ *
+ *  Redisplays will be requested from every key event.
+ *
+ *  @param key the key that was pressed.
+ *  @param x the mouse x-position when <code>key</code> was pressed.
+ *  @param y the mouse y-position when <code>key</code> was pressed.
+ */
+void handle_key(unsigned char key, int x, int y) {
+    switch (key) {
+        case ' ':
+            if (!top_view) {
+                glMatrixMode(GL_MODELVIEW);
+                glLoadIdentity();
+                gluLookAt(camera_position.x, 20.0, camera_position.z, 
+                    camera_position.x + 1.0, camera_position.y,
+                    camera_position.z,
+                    1.0, 0.0, 0.0);
+                glutSpecialFunc(NULL);
+            }
+            else {
+                set_camera();
+                glutSpecialFunc(handle_special_key);
+            }
+            top_view = !top_view;
+            break;
+        default:
+            break;
+    }
+    glutPostRedisplay();
+}
+
 void handle_special_key(int key, int x, int y) {
 	switch (key) {
 		case GLUT_KEY_LEFT:
@@ -184,7 +222,7 @@ void handle_special_key(int key, int x, int y) {
  */
 void initialize_maze() {
 
-    maze = make_maze(maze_height, maze_width, time(NULL)) ;
+    maze = make_maze(maze_height, maze_width, time(NULL));
 
 }
 
@@ -235,13 +273,13 @@ void init() {
     // Viewpoint position.
     theta = 0;
 	cell_t *start = get_start(maze);
-
+	
     camera_position.x = start->c+0.5;
     camera_position.y = 0.75;
     camera_position.z = start->r+0.5;
 
     set_lights();
-    
+
     // Set the viewpoint.
     set_camera();
 }
@@ -321,7 +359,7 @@ void draw_cube() {
  * along the x-axis centered at the origin.
  */
 void draw_wall() {
-	debug("draw_wall()");
+//	debug("draw_wall()");
 	
     // Specify the material for the wall.
     glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, blue_plastic.diffuse);
@@ -406,17 +444,17 @@ void draw_square(material_t *material) {
  *  the corresponding axis.
  */
 void draw_axes() {
-    glBegin(GL_LINES) ;
-    glColor3f(0.0, 0.0, 1.0) ;
-    glVertex3f(0.0f, 0.0f, -100.0f) ;
-    glVertex3f(0.0f, 0.0f, 100.0f) ;
-    glColor3f(1.0, 0.0, 0.0) ;
-    glVertex3f(-100.0f, 0.0f, 0.0f) ;
-    glVertex3f(100.0f, 0.0f, 0.0f) ;
-    glColor3f(0.0, 1.0, 0.0) ;
-    glVertex3f(0.0f, -100.0f, 0.0f) ;
-    glVertex3f(0.0f, 100.0f, 0.0f) ;
-    glEnd() ;
+    glBegin(GL_LINES);
+    glColor3f(0.0, 0.0, 1.0);
+    glVertex3f(0.0f, 0.0f, -100.0f);
+    glVertex3f(0.0f, 0.0f, 100.0f);
+    glColor3f(1.0, 0.0, 0.0);
+    glVertex3f(-100.0f, 0.0f, 0.0f);
+    glVertex3f(100.0f, 0.0f, 0.0f);
+    glColor3f(0.0, 1.0, 0.0);
+    glVertex3f(0.0f, -100.0f, 0.0f);
+    glVertex3f(0.0f, 100.0f, 0.0f);
+    glEnd();
 }
 
 /** Draw the maze by first drawing the west and south exterior walls, then
