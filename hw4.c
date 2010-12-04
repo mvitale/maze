@@ -40,16 +40,22 @@ int win_height;
 // Viewing data.
 int theta;          
 point3_t camera_position;
+vector3_t up_dir = {0.0, 1.0, 0.0};
 #define EYE_THETA_INCR 5
 #define CAMERA_POSN_INCR 0.1
-bool top_view = false;
+#define NORM_HEIGHT 0.75
+#define JUMP_HEIGHT 20.0
 
 #define D2R(x) ((x)*M_PI/180.0)
 
-// The maze.
+// The maze and associated data.
 maze_t *maze;
 int maze_width;
 int maze_height;
+cell_t *start;
+cell_t *end;
+bool *visited;
+
 
 // View-volume specification in camera frame basis.
 float view_plane_near = 0.1f;
@@ -58,7 +64,8 @@ float view_plane_far = 100.0f;
 // Callbacks.
 void handle_display(void);
 void handle_resize(int, int);
-void handle_key(unsigned char, int, int);
+void handle_key_norm(unsigned char, int, int);
+void handle_key_jumped(unsigned char, int, int);
 void handle_special_key(int, int, int);
 
 // Application functions.
@@ -66,9 +73,16 @@ void init();
 void initialize_maze();
 void draw_wall();
 void draw_cube();
+void draw_breadcrumbs();
 void draw_maze();
 void draw_string(char*);
 void print_position_heading();
+bool is_visited(int, int);
+void process_cell();
+void set_visited(int, int);
+void set_camera_norm();
+void set_camera_jumped();
+void set_projection_viewport();
 
 // Materials and lights.
 typedef struct _material_t {
@@ -77,6 +91,9 @@ typedef struct _material_t {
 	GLfloat specular[4];
 	GLfloat phong_exp;
 } material_t;
+
+// Material setting function.
+void set_material(material_t*);
 
 typedef struct _light_t {
 	GLfloat position[4];
@@ -111,6 +128,27 @@ material_t red_plastic = {
 	1000.0f
 };
 
+material_t bright_gold = {
+	{0.0f, 0.0f, 0.0f, 1.0f},
+	{10.0f, 10.0f, 0.0f, 1.0f},
+	{0.0f, 0.0f, 0.0f, 1.0f},
+	0.0f
+};
+
+material_t bright_green = {
+	{0.0f, 0.0f, 0.0f, 1.0f},
+	{0.0f, 10.0f, 0.0f, 1.0f},
+	{0.0f, 0.0f, 0.0f, 1.0f},
+	0.0f
+};
+
+material_t bright_red = {
+	{0.0f, 0.0f, 0.0f, 1.0f},
+	{10.0f, 0.0f, 0.0f, 1.0f},
+	{0.0f, 0.0f, 0.0f, 1.0f},
+	0.0f
+};
+
 int main(int argc, char **argv) {
 	// Initialize the drawing window.
 	glutInitWindowSize(DEFAULT_WIN_WIDTH, DEFAULT_WIN_HEIGHT);
@@ -124,7 +162,7 @@ int main(int argc, char **argv) {
 	// Set callbacks.
 	glutReshapeFunc(handle_resize);
 	glutDisplayFunc(handle_display);
-	glutKeyboardFunc(handle_key);
+	glutKeyboardFunc(handle_key_norm);
 	glutSpecialFunc(handle_special_key);
 
 	// GL initialization.
@@ -148,22 +186,26 @@ int main(int argc, char **argv) {
     return EXIT_SUCCESS;
 }
 
-/** Set the camera transform. The viewpoint is given by the eye coordinates,
- * and we look in angle theta around the y-axis.
+// GLUT CALLBACKS.
+
+/** Handle a display request by clearing the screen.
  */
-void set_camera() {
-    // Set the camera transform.
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-	
-    glRotatef(360-(theta-90), 0.0, 1.0, 0.0);
-    glTranslatef(-camera_position.x, -camera_position.y, -camera_position.z);
+void handle_display() {
+
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	draw_maze();
+	draw_breadcrumbs();
+
+	// Display the player's position and heading.
+	print_position_heading();
+
+    glFlush();
 }
 
-/** Handle keyboard events:
+/** Handle keyboard events when in the normal in maze view:
  *  
- *  - SPACE:  Jump to top view if not already in top view. Otherwise,
- *            return to normal first person view.
+ *  - SPACE:  Jump to top view.
  *
  *  Redisplays will be requested from every key event.
  *
@@ -171,28 +213,19 @@ void set_camera() {
  *  @param x the mouse x-position when <code>key</code> was pressed.
  *  @param y the mouse y-position when <code>key</code> was pressed.
  */
-void handle_key(unsigned char key, int x, int y) {
+void handle_key_norm(unsigned char key, int x, int y) {
+	debug("handle_key_norm()");
+
     switch (key) {
         case ' ':
-            if (!top_view) {
-                glMatrixMode(GL_MODELVIEW);
-                glLoadIdentity();
-                gluLookAt(camera_position.x, 20.0, camera_position.z, 
-                    camera_position.x + 1.0, camera_position.y,
-                    camera_position.z,
-                    1.0, 0.0, 0.0);
-                glutSpecialFunc(NULL);
-            }
-            else {
-                set_camera();
-                glutSpecialFunc(handle_special_key);
-            }
-            top_view = !top_view;
+			set_camera_jumped();
+			glutKeyboardFunc(handle_key_jumped);
+			glutSpecialFunc(NULL);
+			glutPostRedisplay();
             break;
         default:
             break;
     }
-    glutPostRedisplay();
 }
 
 void handle_special_key(int key, int x, int y) {
@@ -216,16 +249,105 @@ void handle_special_key(int key, int x, int y) {
 		default:
 			break;
 	}
-	set_camera();
+	
+	process_cell();
+	
+	set_camera_norm();
 	glutPostRedisplay();
 }
 
-/*  Initialize the maze by building all possible walls.
+/** Determine if the current cell is the end cell or if it is a newly visited
+ *	cell. 
+ *
+ *	XXX: NOT YET IMPLEMENTED If it is the end cell, print a message to that 
+ *	effect and give the player the choice to play another maze. 
+ *
+ *	IMPLEMENTED: If it is a newly visited cell that isn't the start or end 
+ *	cell, set it as visited so that a breadcrumb will be drawn in it.
+ */
+void process_cell() {
+	
+	// Get the current cell.
+	int r = floor(camera_position.z);
+	int c = floor(camera_position.x);
+	cell_t *cell = get_cell(maze, r, c);
+	
+	// If this is a newly visited cell that isn't the start or end cell, 
+	// set it as visited.
+	if (!is_visited(r, c) && cell_cmp(cell, start) != 0) { 
+		set_visited(r, c);
+	}
+}
+
+/** Handle keyboard events when in the overhead view:
+ *  
+ *  - SPACE:  Return to the view (in-maze) view.
+ *
+ *  @param key the key that was pressed.
+ *  @param x the mouse x-position when <code>key</code> was pressed.
+ *  @param y the mouse y-position when <code>key</code> was pressed.
+ */
+void handle_key_jumped(unsigned char key, int x, int y) {
+	if (key == ' ') {
+		glutKeyboardFunc(handle_key_norm);
+		glutSpecialFunc(handle_special_key);
+		set_camera_norm();
+		glutPostRedisplay();
+	}
+}
+
+
+
+/** Handle a resize event by recording the new width and height.
+ *  
+ *  @param width the new width of the window.
+ *  @param height the new height of the window.
+ */
+void handle_resize(int width, int height) {
+    win_width = width;
+    win_height = height;
+    
+    set_projection_viewport();
+
+    glutPostRedisplay();
+}
+
+/** Set the camera transform. The viewpoint is given by the eye coordinates,
+ * and we look in angle theta-90 around the y-axis (theta is the angle the
+ * view direction makes with the x axis).
+ */
+void set_camera_norm() {
+	
+    // Set the camera transform.
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+    glRotatef(360-(theta-90), 0.0, 1.0, 0.0);
+    glTranslatef(-camera_position.x, -camera_position.y, -camera_position.z);
+
+}
+
+/** Set the camera transform for the 'jumped' overhead view.
+ */
+void set_camera_jumped() {
+
+	debug("set_camera_jumped()");
+
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+	gluLookAt(camera_position.x, JUMP_HEIGHT, camera_position.z, 
+		camera_position.x+cos(D2R(theta)), camera_position.y,
+		camera_position.z+sin(D2R(-theta)),
+		up_dir.x, up_dir.y, up_dir.z);
+}
+
+/*  Initialize the maze by building all possible walls and set the global
+ *  start and end cell pointers.
  */
 void initialize_maze() {
 
     maze = make_maze(maze_height, maze_width, time(NULL));
-
+	start = get_start(maze);
+	end = get_end(maze);
 }
 
 /** Set the projection and viewport transformations.  We use perspective
@@ -271,102 +393,29 @@ void init() {
     debug("init()");
 
 	initialize_maze();
+	visited = malloc(maze_width*maze_height*sizeof(bool));
 
     // Viewpoint position.
     theta = 0;
 	cell_t *start = get_start(maze);
 	
     camera_position.x = start->c+0.5;
-    camera_position.y = 0.75;
+    camera_position.y = NORM_HEIGHT;
     camera_position.z = start->r+0.5;
 
     set_lights();
 
     // Set the viewpoint.
-    set_camera();
-}
-
-/** Handle a resize event by recording the new width and height.
- *  
- *  @param width the new width of the window.
- *  @param height the new height of the window.
- */
-void handle_resize(int width, int height) {
-    win_width = width;
-    win_height = height;
-    
-    set_projection_viewport();
-
-    glutPostRedisplay();
-}
-
-void draw_cube() {
-    debug("draw_cube()");
-    
-    // Specify the material for the cube.
-    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, blue_plastic.diffuse);
-    glMaterialfv(GL_FRONT, GL_SPECULAR, blue_plastic.specular);
-    glMaterialf(GL_FRONT, GL_SHININESS, blue_plastic.phong_exp);
-
-    // Draw cube as a sequence of GL_QUADS.
-    glBegin(GL_QUADS);
-
-
-    // z=1 plane.
-    glNormal3f(0.0, 0.0, 1.0);
-    glVertex3f(-1.0, -1.0, 1.0);
-    glVertex3f(1.0, -1.0, 1.0);
-    glVertex3f(1.0, 1.0, 1.0);
-    glVertex3f(-1.0, 1.0, 1.0);
-    
-    // z=-1 plane.
-    glNormal3f(0.0, 0.0, -1.0);
-    glVertex3f(-1.0, -1.0, -1.0);
-    glVertex3f(-1.0, 1.0, -1.0);
-    glVertex3f(1.0, 1.0, -1.0);
-    glVertex3f(1.0, -1.0, -1.0);
-
-    // x=1 plane.
-    glNormal3f(1.0, 0.0, 0.0);
-    glVertex3f(1.0, -1.0, 1.0);
-    glVertex3f(1.0, -1.0, -1.0);
-    glVertex3f(1.0, 1.0, -1.0);
-    glVertex3f(1.0, 1.0, 1.0);
-
-    // x=-1 plane.
-    glNormal3f(-1.0, 0.0, 0.0);
-    glVertex3f(-1.0, -1.0, 1.0);
-    glVertex3f(-1.0, 1.0, 1.0);
-    glVertex3f(-1.0, 1.0, -1.0);
-    glVertex3f(-1.0, -1.0, -1.0);
-
-    // y=1 plane.
-    glNormal3f(0.0, 1.0, 0.0);
-    glVertex3f(-1.0, 1.0, 1.0);
-    glVertex3f(1.0, 1.0, 1.0);
-    glVertex3f(1.0, 1.0, -1.0);
-    glVertex3f(-1.0, 1.0, -1.0);
-
-    // y=-1 plane.
-    glNormal3f(0.0, -1.0, 0.0);
-    glVertex3f(-1.0, -1.0, 1.0);
-    glVertex3f(-1.0, -1.0, -1.0);
-    glVertex3f(1.0, -1.0, -1.0);
-    glVertex3f(1.0, -1.0, 1.0);
-
-    glEnd();
+    set_camera_norm();
 }
 
 /** Draw a canonical rectangular solid of length 1, height 1, and width .25
  * along the x-axis centered at the origin.
  */
 void draw_wall() {
-//	debug("draw_wall()");
 	
     // Specify the material for the wall.
-    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, blue_plastic.diffuse);
-    glMaterialfv(GL_FRONT, GL_SPECULAR, blue_plastic.specular);
-    glMaterialf(GL_FRONT, GL_SHININESS, blue_plastic.phong_exp);
+	set_material(&blue_plastic);
 
 	// Draw the wall as a sequence of GL_QUADS
 	glBegin(GL_QUADS);
@@ -420,15 +469,15 @@ void draw_wall() {
 }
 
 /** Draw a sqaure of side length 2 in the xz plane centered at the origin
+ *
+ * @param material the material to use.
  */
 void draw_square(material_t *material) {
 
 	debug("draw_square()");
 
 	// Specify the material for the square.
-	glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, material->diffuse);
-	glMaterialfv(GL_FRONT, GL_SPECULAR, material->specular);
-	glMaterialf(GL_FRONT, GL_SHININESS, material->phong_exp);
+	set_material(material);
 
 	// Draw the square.
 	glBegin(GL_QUADS);
@@ -442,23 +491,6 @@ void draw_square(material_t *material) {
 	glEnd();
 }
 
-/** Draw the coordinate axes as line segments from -100 to +100 along
- *  the corresponding axis.
- */
-void draw_axes() {
-    glBegin(GL_LINES);
-    glColor3f(0.0, 0.0, 1.0);
-    glVertex3f(0.0f, 0.0f, -100.0f);
-    glVertex3f(0.0f, 0.0f, 100.0f);
-    glColor3f(1.0, 0.0, 0.0);
-    glVertex3f(-100.0f, 0.0f, 0.0f);
-    glVertex3f(100.0f, 0.0f, 0.0f);
-    glColor3f(0.0, 1.0, 0.0);
-    glVertex3f(0.0f, -100.0f, 0.0f);
-    glVertex3f(0.0f, 100.0f, 0.0f);
-    glEnd();
-}
-
 /** Draw the maze by first drawing the west and south exterior walls, then
  * drawing any north or east walls of each cell.
  */
@@ -470,19 +502,17 @@ void draw_maze() {
 
 	// Draw a green square on the floor of the start cell and a red one on
 	// the floor of the end cell.
-	cell_t *start = get_start(maze);
-	cell_t *end = get_end(maze);
 
 	glPushMatrix();
 	glTranslatef(start->c+0.5, 0.0, start->r+0.5);
 	glScalef(0.5, 0.0, 0.5);
-	draw_square(&green_plastic);
+	draw_square(&bright_green);
 	glPopMatrix();
 	
 	glPushMatrix();
 	glTranslatef(end->c+0.5, 0.0, end->r+0.5);
 	glScalef(0.5, 0.0, 0.5);
-	draw_square(&red_plastic);
+	draw_square(&bright_red);
 	glPopMatrix();
 
 	
@@ -525,7 +555,7 @@ void draw_maze() {
 	glDisable(GL_NORMALIZE);
 }
 	
-/* Draw a provided string at the current raster position.
+/* Draw a string at the current raster position.
  * 
  * Parameters:
  *		the_string - The string to display.
@@ -537,9 +567,29 @@ void draw_string(char *the_string) {
 	}
 }
 
+/** Draw square markers on the floor of all visited cells.
+ */
+void draw_breadcrumbs() {
+
+	glMatrixMode(GL_MODELVIEW);
+
+	for (int i=0; i<maze_width; i++) {
+		for (int j=0; j<maze_height; j++) {
+			if (is_visited(i, j)) {
+				glPushMatrix();
+				glTranslatef(j+.5, 0.0, i+.5);
+				glScalef(.25, 1.0, .25);
+				draw_square(&bright_gold);
+				glPopMatrix();
+			}
+		}
+	}
+}
+
 /** Print the position (camera_position) and heading (theta) of the player.
  */
 void print_position_heading() {
+
 	debug("print_position_heading()");
 	glColor3f(1.0f, 1.0f, 1.0f);
 
@@ -556,22 +606,30 @@ void print_position_heading() {
 	free(s);
 }
 
-/** Handle a display request by clearing the screen.
+/** Determine whether or not a given cell in the maze has been visted or not.
+ *
+ * @param r the row of the cell.
+ * @param c the column of the cell.
  */
-void handle_display() {
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+bool is_visited(int r, int c) {
+	return *(visited+r*maze_height+c);
+}
 
-    //glMatrixMode(GL_MODELVIEW);
-    //glPushMatrix();
-    // Keep cube at origin for now.
-    //glTranslatef(0.0, 0.0, 0.0);
-    //draw_cube();
-    //glPopMatrix();
-	draw_axes();
-	draw_maze();
+/** Mark a cell as visited.
+ *
+ * @param r the row of the cell.
+ * @param c the column of the cell.
+ */
+void set_visited(int r, int c) {
+	*(visited+r*maze_height+c) = true;
+}
 
-	// Display the player's position and heading.
-	print_position_heading();
+/** Set a material as the current material.
+ */
+void set_material(material_t *material) {
+	debug("set_material()");
+    glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, material->diffuse);
+    glMaterialfv(GL_FRONT, GL_SPECULAR, material->specular);
+    glMaterialf(GL_FRONT, GL_SHININESS, material->phong_exp);
 
-    glFlush();
 }
