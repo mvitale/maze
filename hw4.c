@@ -380,18 +380,6 @@ void init() {
 	visited = calloc(maze_width*maze_height, sizeof(bool));
 	debug("total cells: %d", maze_width*maze_height);
 
-	for (int i=0; i<maze_width*maze_height; i++) {
-		if (*(visited+i) == true) {
-			debug("TRUE");
-		}
-		else if (*(visited+i) == false) {
-			debug("%d FALSE", i);
-		}
-		else {
-			debug("%d DON'T KNOW", i);
-		}
-	}
-
     // Viewpoint position.
     theta = 0;
 	cell_t *start = get_start(maze);
