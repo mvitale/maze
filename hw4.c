@@ -257,7 +257,8 @@ void process_cell() {
 	
 	// If this is a newly visited cell that isn't the start or end cell, 
 	// set it as visited.
-	if (!is_visited(r, c) && cell_cmp(cell, start) != 0) { 
+	if (!is_visited(r, c) && cell_cmp(cell, start) != 0 && 
+			cell_cmp(cell, end) != 0) { 
 		set_visited(r, c);
 	}
 }
@@ -376,7 +377,20 @@ void init() {
     debug("init()");
 
 	initialize_maze();
-	visited = malloc(maze_width*maze_height*sizeof(bool));
+	visited = calloc(maze_width*maze_height, sizeof(bool));
+	debug("total cells: %d", maze_width*maze_height);
+
+	for (int i=0; i<maze_width*maze_height; i++) {
+		if (*(visited+i) == true) {
+			debug("TRUE");
+		}
+		else if (*(visited+i) == false) {
+			debug("%d FALSE", i);
+		}
+		else {
+			debug("%d DON'T KNOW", i);
+		}
+	}
 
     // Viewpoint position.
     theta = 0;
@@ -468,8 +482,6 @@ void draw_wall() {
  * @param material the material to use.
  */
 void draw_square(material_t *material) {
-
-	debug("draw_square()");
 
 	// Specify the material for the square.
 	set_material(material);
@@ -623,13 +635,14 @@ bool is_visited(int r, int c) {
  * @param c the column of the cell.
  */
 void set_visited(int r, int c) {
+	debug("set_visited()");
 	*(visited+r*maze_height+c) = true;
 }
 
 /** Set a material as the current material.
  */
 void set_material(material_t *material) {
-	debug("set_material()");
+
     glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, material->diffuse);
     glMaterialfv(GL_FRONT, GL_SPECULAR, material->specular);
     glMaterialf(GL_FRONT, GL_SHININESS, material->phong_exp);
