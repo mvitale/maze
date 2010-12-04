@@ -409,8 +409,10 @@ void init() {
 /** Basic GL initialization.
  */
 void gl_init() {
-
+	glEnable(GL_NORMALIZE);
 	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_CULL_FACE);
+	glCullFace(GL_FRONT);
 	glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
     glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
@@ -431,11 +433,11 @@ void draw_wall() {
 
 	// x=.5 plane
 	glNormal3f(1.0, 0.0, 0.0);
-	glVertex3f(0.5, -0.5, -0.125);
-	glVertex3f(0.5, 0.5, -0.125);
-	glVertex3f(0.5, 0.5, 0.125);
 	glVertex3f(0.5, -0.5, 0.125);
-	
+	glVertex3f(0.5, 0.5, 0.125);
+	glVertex3f(0.5, 0.5, -0.125);
+	glVertex3f(0.5, -0.5, -0.125);
+
 	// x=-.5 plane
 	glNormal3f(-1.0, 0.0, 0.0);
 	glVertex3f(-0.5, -0.5, -0.125);
@@ -445,10 +447,10 @@ void draw_wall() {
 	
 	// y=.5 plane
 	glNormal3f(0.0, 1.0, 0.0);
-	glVertex3f(0.5, 0.5, -0.125);
-	glVertex3f(-0.5, 0.5, -0.125);
-	glVertex3f(-0.5, 0.5, 0.125);
 	glVertex3f(0.5, 0.5, 0.125);
+	glVertex3f(-0.5, 0.5, 0.125);
+	glVertex3f(-0.5, 0.5, -0.125);
+	glVertex3f(0.5, 0.5, -0.125);
 	
 	
 	// y=-.5 plane
@@ -461,11 +463,10 @@ void draw_wall() {
 	
 	// z=.125 plane
 	glNormal3f(0.0, 0.0, 1.0);
-	glVertex3f(0.5, -0.5, 0.125);
-	glVertex3f(0.5, 0.5, 0.125);
-	glVertex3f(-0.5, 0.5, 0.125);
 	glVertex3f(-0.5, -0.5, 0.125);
-
+	glVertex3f(-0.5, 0.5, 0.125);
+	glVertex3f(0.5, 0.5, 0.125);
+	glVertex3f(0.5, -0.5, 0.125);
 
 	// z=-.125 plane
 	glNormal3f(0.0, 0.0, -1.0);
@@ -490,10 +491,10 @@ void draw_square(material_t *material) {
 	glBegin(GL_QUADS);
 
 	glNormal3f(0.0, 1.0, 0.0);
-	glVertex3f(1.0, 0.0, -1.0);
-	glVertex3f(-1.0, 0.0, -1.0);
-	glVertex3f(-1.0, 0.0, 1.0);
 	glVertex3f(1.0, 0.0, 1.0);
+	glVertex3f(-1.0, 0.0, 1.0);
+	glVertex3f(-1.0, 0.0, -1.0);
+	glVertex3f(1.0, 0.0, -1.0);
 
 	glEnd();
 }
@@ -513,10 +514,7 @@ void draw_maze() {
 	// Draw the breadcrumbs.
 	draw_breadcrumbs();	
 	
-	// Draw the west and south exterior walls. We enable GL_NORMALIZE
-	// to ensure that scaled walls have unit-length surface normals, then
-	// disable it since we won't be doing any more scaling.
-	glEnable(GL_NORMALIZE);
+	// Draw the west and south exterior walls. 
 	glPushMatrix();
 	glTranslatef(maze_height/2.0, 0.5, 0.0);
 	glScalef(maze_height+0.25, 1.0, 1.0);
@@ -549,7 +547,6 @@ void draw_maze() {
 			}
 		}
 	}
-	glDisable(GL_NORMALIZE);
 }
 	
 /* Draw a string at the current raster position.
