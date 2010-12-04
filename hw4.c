@@ -38,7 +38,7 @@ int win_width;
 int win_height;
 
 // Viewing data.
-int theta;          
+int theta;			// The angle the look direction makes with the x-axis.    
 point3_t camera_position;
 vector3_t up_dir = {0.0, 1.0, 0.0};
 #define EYE_THETA_INCR 5
@@ -56,7 +56,6 @@ cell_t *start;
 cell_t *end;
 bool *visited;
 
-
 // View-volume specification in camera frame basis.
 float view_plane_near = 0.1f;
 float view_plane_far = 100.0f;
@@ -70,9 +69,11 @@ void handle_special_key(int, int, int);
 
 // Application functions.
 void init();
+void gl_init();
 void initialize_maze();
 void draw_wall();
 void draw_cube();
+void draw_start_end();
 void draw_breadcrumbs();
 void draw_maze();
 void draw_string(char*);
@@ -114,20 +115,6 @@ material_t blue_plastic = {
     1000.0f
 };
 
-material_t green_plastic = {
-	{0.0f, 1.0f, 0.0f, 1.0f},
-	{0.0f, 1.0f, 0.0f, 1.0f},
-	{1.0f, 1.0f, 1.0f, 1.0f},
-	3000.0f
-};
-
-material_t red_plastic = {
-	{1.0f, 0.0f, 0.0f, 1.0f},
-	{1.0f, 0.0f, 0.0f, 1.0f},
-	{1.0f, 1.0f, 1.0f, 1.0f},
-	1000.0f
-};
-
 material_t bright_gold = {
 	{0.0f, 0.0f, 0.0f, 1.0f},
 	{10.0f, 10.0f, 0.0f, 1.0f},
@@ -150,6 +137,11 @@ material_t bright_red = {
 };
 
 int main(int argc, char **argv) {
+	
+	// Parse the width and height of the maze.
+	maze_width = atoi(argv[1]);
+	maze_height = atoi(argv[2]);
+
 	// Initialize the drawing window.
 	glutInitWindowSize(DEFAULT_WIN_WIDTH, DEFAULT_WIN_HEIGHT);
 	glutInitWindowPosition(0, 0);
@@ -166,21 +158,12 @@ int main(int argc, char **argv) {
 	glutSpecialFunc(handle_special_key);
 
 	// GL initialization.
-	glEnable(GL_DEPTH_TEST);
-    // glEnable(GL_CULL_FACE);
-    // glCullFace(GL_BACK);
-	glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0);
-    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
-	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-	
-	// Initialize the maze.
-	maze_width = atoi(argv[1]);
-	maze_height = atoi(argv[2]);
+	gl_init();	
 
     // Application initialization.
     init();
 
+	// Enter the main loop.
 	glutMainLoop();
 
     return EXIT_SUCCESS;
@@ -194,8 +177,8 @@ void handle_display() {
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+	// Display the maze.
 	draw_maze();
-	draw_breadcrumbs();
 
 	// Display the player's position and heading.
 	print_position_heading();
@@ -296,8 +279,6 @@ void handle_key_jumped(unsigned char key, int x, int y) {
 	}
 }
 
-
-
 /** Handle a resize event by recording the new width and height.
  *  
  *  @param width the new width of the window.
@@ -389,6 +370,8 @@ void set_lights() {
     glLightfv(GL_LIGHT0, GL_SPECULAR, light->color);
 }
 
+/** Create the maze and visited array, set the lights, and set the camera.
+ */
 void init() {
     debug("init()");
 
@@ -407,6 +390,18 @@ void init() {
 
     // Set the viewpoint.
     set_camera_norm();
+}
+
+/** Basic GL initialization.
+ */
+void gl_init() {
+
+	glEnable(GL_DEPTH_TEST);
+	glEnable(GL_LIGHTING);
+    glEnable(GL_LIGHT0);
+    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
+	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+
 }
 
 /** Draw a canonical rectangular solid of length 1, height 1, and width .25
@@ -500,21 +495,11 @@ void draw_maze() {
 	
 	glMatrixMode(GL_MODELVIEW);
 
-	// Draw a green square on the floor of the start cell and a red one on
-	// the floor of the end cell.
+	// Draw the start and end cell markers.
+	draw_start_end();
 
-	glPushMatrix();
-	glTranslatef(start->c+0.5, 0.0, start->r+0.5);
-	glScalef(0.5, 0.0, 0.5);
-	draw_square(&bright_green);
-	glPopMatrix();
-	
-	glPushMatrix();
-	glTranslatef(end->c+0.5, 0.0, end->r+0.5);
-	glScalef(0.5, 0.0, 0.5);
-	draw_square(&bright_red);
-	glPopMatrix();
-
+	// Draw the breadcrumbs.
+	draw_breadcrumbs();	
 	
 	// Draw the west and south exterior walls. We enable GL_NORMALIZE
 	// to ensure that scaled walls have unit-length surface normals, then
@@ -565,6 +550,23 @@ void draw_string(char *the_string) {
 	for (int i=0; i<strlen(the_string); i++) {
 		glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, the_string[i]);
 	}
+}
+
+/** Draw a green square marker on the start cell and a red one on the end cell.
+ */
+void draw_start_end() {
+
+	glPushMatrix();
+	glTranslatef(start->c+0.5, 0.0, start->r+0.5);
+	glScalef(0.5, 0.0, 0.5);
+	draw_square(&bright_green);
+	glPopMatrix();
+	
+	glPushMatrix();
+	glTranslatef(end->c+0.5, 0.0, end->r+0.5);
+	glScalef(0.5, 0.0, 0.5);
+	draw_square(&bright_red);
+	glPopMatrix();
 }
 
 /** Draw square markers on the floor of all visited cells.
