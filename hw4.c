@@ -40,9 +40,13 @@ int win_height;
 // Viewing data.
 int theta;			// The angle the look direction makes with the x-axis.    
 point3_t camera_position;
+point3_t jump_look_at;	  // To be set at the beginning of every jump
+						  // and used as the look-at point throughout the
+						  // animation.
 vector3_t up_dir = {0.0, 1.0, 0.0};
 #define EYE_THETA_INCR 5
 #define CAMERA_POSN_INCR 0.1
+#define JUMP_INCR 0.05
 #define NORM_HEIGHT 0.75
 #define JUMP_HEIGHT 20.0
 
@@ -77,10 +81,13 @@ void draw_start_end();
 void draw_breadcrumbs();
 void draw_maze();
 void draw_string(char*);
+void animate_jump();
+void animate_fall();
 void print_position_heading();
 bool is_visited(int, int);
 void process_cell();
 void set_visited(int, int);
+void set_jump_look_at();
 void set_camera_norm();
 void set_camera_jumped();
 void set_projection_viewport();
@@ -145,7 +152,9 @@ int main(int argc, char **argv) {
 	// Initialize the drawing window.
 	glutInitWindowSize(DEFAULT_WIN_WIDTH, DEFAULT_WIN_HEIGHT);
 	glutInitWindowPosition(0, 0);
-	glutInitDisplayMode(GLUT_SINGLE | GLUT_RGB | GLUT_DEPTH);
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH); // Double buffering
+															  // seems to make the
+															  // animation smoother.
 	glutInit(&argc, argv);
 
 	// Create the main window.
@@ -184,13 +193,13 @@ void handle_display() {
 	print_position_heading();
 
     glFlush();
+	glutSwapBuffers();
 }
 
-/** Handle keyboard events when in the normal in maze view:
+/** Handle keyboard events when in the normal maze view:
  *  
- *  - SPACE:  Jump to top view.
- *
- *  Redisplays will be requested from every key event.
+ *  - SPACE: Animate jumping to an overhead view of the maze. Movement is disabled
+ *			 until the player switches back to the in-maze view.
  *
  *  @param key the key that was pressed.
  *  @param x the mouse x-position when <code>key</code> was pressed.
@@ -201,16 +210,27 @@ void handle_key_norm(unsigned char key, int x, int y) {
 
     switch (key) {
         case ' ':
-			set_camera_jumped();
-			glutKeyboardFunc(handle_key_jumped);
+			glutKeyboardFunc(NULL);
 			glutSpecialFunc(NULL);
-			glutPostRedisplay();
+			set_jump_look_at();
+			glutIdleFunc(animate_jump);
             break;
         default:
             break;
     }
 }
 
+/** Handle keyboard events when in the normal maze view:
+ *
+ *	-LEFT: Rotate the camera <code>EYE_THETA_INCR</code> degrees to the left.
+ *	-RIGHT: Rotate the camera <code>EYE_THETA_INCR</code> degrees to the right.
+ *	-UP: Move the camera forward.
+ *	-DOWN: Move the camera backwards.
+ *
+ *	@param key the key that was pressed.
+ *	@param x the mouse x-position when <code>key</code> was pressed.
+ *	@param y the mouse y-position when <code>key</code> was pressed.
+ */
 void handle_special_key(int key, int x, int y) {
 	switch (key) {
 		case GLUT_KEY_LEFT:
@@ -265,18 +285,17 @@ void process_cell() {
 
 /** Handle keyboard events when in the overhead view:
  *  
- *  - SPACE:  Return to the view (in-maze) view.
+ *  - SPACE: Animate falling back into the maze.
  *
  *  @param key the key that was pressed.
  *  @param x the mouse x-position when <code>key</code> was pressed.
  *  @param y the mouse y-position when <code>key</code> was pressed.
  */
 void handle_key_jumped(unsigned char key, int x, int y) {
+	debug("handle_key_jumped");
 	if (key == ' ') {
-		glutKeyboardFunc(handle_key_norm);
-		glutSpecialFunc(handle_special_key);
-		set_camera_norm();
-		glutPostRedisplay();
+		debug("Space pressed");
+		glutIdleFunc(animate_fall);
 	}
 }
 
@@ -294,12 +313,60 @@ void handle_resize(int width, int height) {
     glutPostRedisplay();
 }
 
+/** Animate a jump to the overhead view.
+ */
+void animate_jump() {
+
+	debug("animate_jump()");
+
+	// If the y-coordinate of the camera is less than JUMP_HEIGHT,
+	// increment it by JUMP_INCR and redisplay. Otherwise, we're done animating,
+	// so unregister the idle callback and set the keyboard callback to allow
+	// the player to return to the normal view.
+	if (camera_position.y < JUMP_HEIGHT) {
+		glMatrixMode(GL_MODELVIEW);
+		glLoadIdentity();
+		camera_position.y += JUMP_INCR;
+		gluLookAt(camera_position.x, camera_position.y, camera_position.z,
+				  jump_look_at.x, jump_look_at.y, jump_look_at.z,
+				  up_dir.x, up_dir.y, up_dir.z);
+		glutPostRedisplay();
+	} else {
+		glutKeyboardFunc(handle_key_jumped);
+		glutIdleFunc(NULL);
+	}
+
+}
+
+/** Animate falling back to the normal in-maze view from the overhead view.
+ */
+void animate_fall() {
+
+	debug("animate_fall()");
+
+	if (camera_position.y > NORM_HEIGHT) {
+		glMatrixMode(GL_MODELVIEW);
+		glLoadIdentity();
+		camera_position.y -= JUMP_INCR;
+		gluLookAt(camera_position.x, camera_position.y, camera_position.z,
+				  jump_look_at.x, jump_look_at.y, jump_look_at.z,
+				  up_dir.x, up_dir.y, up_dir.z);
+		glutPostRedisplay();
+	} else {
+		glutKeyboardFunc(handle_key_norm);
+		glutSpecialFunc(handle_special_key);
+		glutIdleFunc(NULL);
+	}
+}
+
 /** Set the camera transform. The viewpoint is given by the eye coordinates,
  * and we look in angle theta-90 around the y-axis (theta is the angle the
  * view direction makes with the x axis).
  */
 void set_camera_norm() {
 	
+	debug("set_camera_norm()");
+
     // Set the camera transform.
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
@@ -633,3 +700,12 @@ void set_material(material_t *material) {
     glMaterialf(GL_FRONT, GL_SHININESS, material->phong_exp);
 
 }
+
+/** Set the look-at point for a jump animation.
+ */
+void set_jump_look_at() {
+	jump_look_at.x = camera_position.x + cos(D2R(theta));
+	jump_look_at.y = camera_position.y;
+	jump_look_at.z = camera_position.z + sin(D2R(-theta));
+}
+
