@@ -95,18 +95,19 @@ material_t blue_plastic = {
     1000.0f
 };
 
-material_t green_plastic = {
-	{0.0f, 1.0f, 0.0f, 1.0f},
-	{0.0f, 1.0f, 0.0f, 1.0f},
-	{1.0f, 1.0f, 1.0f, 1.0f},
-	3000.0f
+
+material_t start_square_material = {
+	{0.0f, 10.0f, 0.0f, 1.0f},
+	{0.0f, 10.0f, 0.0f, 1.0f},
+	{0.0f, 0.0f, 0.0f, 0.0f},
+	0.0f
 };
 
-material_t red_plastic = {
-	{1.0f, 0.0f, 0.0f, 1.0f},
-	{1.0f, 0.0f, 0.0f, 1.0f},
-	{1.0f, 1.0f, 1.0f, 1.0f},
-	1000.0f
+material_t end_square_material = {
+	{10.0f, 0.0f, 0.0f, 1.0f},
+	{10.0f, 0.0f, 0.0f, 1.0f},
+	{0.0f, 0.0f, 0.0f, 0.0f},
+	0.0f
 };
 
 int main(int argc, char **argv) {
@@ -474,13 +475,13 @@ void draw_maze() {
 	glPushMatrix();
 	glTranslatef(start->c+0.5, 0.0, start->r+0.5);
 	glScalef(0.5, 0.0, 0.5);
-	draw_square(&green_plastic);
+	draw_square(&start_square_material);
 	glPopMatrix();
 	
 	glPushMatrix();
 	glTranslatef(end->c+0.5, 0.0, end->r+0.5);
 	glScalef(0.5, 0.0, 0.5);
-	draw_square(&red_plastic);
+	draw_square(&end_square_material);
 	glPopMatrix();
 
 	
