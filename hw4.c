@@ -133,6 +133,8 @@ material_t end_square_material = {
 	{10.0f, 0.0f, 0.0f, 1.0f},
 	{10.0f, 0.0f, 0.0f, 1.0f},
 	{0.0f, 0.0f, 0.0f, 0.0f},
+	0.0f
+};
 
 material_t bright_gold = {
 	{0.0f, 0.0f, 0.0f, 1.0f},
