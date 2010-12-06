@@ -49,8 +49,11 @@ vector3_t up_dir = {0.0, 1.0, 0.0};
 #define JUMP_INCR 0.05
 #define NORM_HEIGHT 0.75
 #define JUMP_HEIGHT 20.0
+#define COLLISION_THRESHOLD 0.25f
 
 #define D2R(x) ((x)*M_PI/180.0)
+
+#define MALLOC1(t) (t *)(malloc(sizeof(t)))
 
 // The maze and associated data.
 maze_t *maze;
@@ -63,34 +66,6 @@ bool *visited;
 // View-volume specification in camera frame basis.
 float view_plane_near = 0.1f;
 float view_plane_far = 100.0f;
-
-// Callbacks.
-void handle_display(void);
-void handle_resize(int, int);
-void handle_key_norm(unsigned char, int, int);
-void handle_key_jumped(unsigned char, int, int);
-void handle_special_key(int, int, int);
-
-// Application functions.
-void init();
-void gl_init();
-void initialize_maze();
-void draw_wall();
-void draw_cube();
-void draw_start_end();
-void draw_breadcrumbs();
-void draw_maze();
-void draw_string(char*);
-void animate_jump();
-void animate_fall();
-void print_position_heading();
-bool is_visited(int, int);
-void process_cell();
-void set_visited(int, int);
-void set_jump_look_at();
-void set_camera_norm();
-void set_camera_jumped();
-void set_projection_viewport();
 
 // Materials and lights.
 typedef struct _material_t {
@@ -107,6 +82,17 @@ typedef struct _light_t {
 	GLfloat position[4];
 	GLfloat color[4];
 } light_t;
+
+// Used for collision detection.
+typedef enum {
+    Forward,
+    Backward
+} Movement_Direction;
+
+typedef struct {
+    float x;
+    float z;
+} point2_t;
 
 GLfloat BLACK[4] = {0.0, 0.0, 0.0, 1.0};
 
@@ -156,6 +142,37 @@ material_t bright_red = {
 	{0.0f, 0.0f, 0.0f, 1.0f},
 	0.0f
 };
+
+// Callbacks.
+void handle_display(void);
+void handle_resize(int, int);
+void handle_key_norm(unsigned char, int, int);
+void handle_key_jumped(unsigned char, int, int);
+void handle_special_key(int, int, int);
+
+// Application functions.
+void init();
+void gl_init();
+void initialize_maze();
+void draw_wall();
+void draw_cube();
+void draw_start_end();
+void draw_breadcrumbs();
+void draw_maze();
+void draw_string(char*);
+void animate_jump();
+void animate_fall();
+void print_position_heading();
+bool is_visited(int, int);
+void process_cell();
+void set_visited(int, int);
+void set_jump_look_at();
+void set_camera_norm();
+void set_camera_jumped();
+void set_projection_viewport();
+cell_t* get_current_cell();
+bool check_collision(Movement_Direction dir);
+float get_distance(point2_t* a, point2_t* b);
 
 int main(int argc, char **argv) {
 	
@@ -234,6 +251,82 @@ void handle_key_norm(unsigned char key, int x, int y) {
     }
 }
 
+bool check_collision(Movement_Direction dir) {
+    // Get current cell.
+    cell_t *current_cell = get_current_cell();
+    
+    // Calculate where the camera will be after moving in Direction dir.
+    point2_t increment;
+    increment.x = CAMERA_POSN_INCR * cos(D2R(theta));
+    increment.z = CAMERA_POSN_INCR * sin(D2R(-theta));
+    if (dir == Backward) {
+        increment.x *= -1;
+        increment.z *= -1;
+    }
+    point2_t new_position;
+    new_position.x = camera_position.x + increment.x;
+    new_position.z = camera_position.z + increment.z;
+    
+    // Get the cell specified by the new position.
+    int new_r = floor(new_position.x);
+    int new_c = floor(new_position.z);
+    cell_t *new_cell = get_cell(maze, new_r, new_c);
+    
+    // If the cells are different, return false immediately.
+    // if ((current_cell->r != new_cell->r) || (current_cell->c != new_cell->c)) {
+    //     return false;
+    // }
+    
+    unsigned char possible_walls[] = {NORTH, EAST, SOUTH, WEST};
+    int possible_walls_length = 4;
+    for (int i = 0; i < possible_walls_length; i++) {
+        unsigned char current_wall = possible_walls[i];
+        if (has_wall(maze, new_cell, current_wall)) {
+            point2_t wall_point;
+            switch (current_wall) {
+                case NORTH:
+                    wall_point.x = new_cell->r + 1;
+                    wall_point.z = new_position.z;
+                    break;
+                case EAST:
+                    wall_point.x = new_position.x;
+                    wall_point.z = new_cell->c + 1;
+                    break;
+                case SOUTH:
+                    wall_point.x = new_cell->r;
+                    wall_point.z = new_position.z;
+                    break;
+                case WEST:
+                    wall_point.x = new_position.x;
+                    wall_point.z = new_cell->c;
+                    break;
+            }
+            if (get_distance(&wall_point, &new_position) <
+                    COLLISION_THRESHOLD) {
+                return false;
+            }
+        }
+    }
+    
+    // unsigned char wall = NORTH;
+    // if (has_wall(maze, current_cell, wall)) {
+    //     debug("this cell has north wall");
+    // }
+    // wall = EAST;
+    // if (has_wall(maze, current_cell, wall)) {
+    //     debug("this cell has east wall.");
+    // }
+    // wall = WEST;
+    // if (has_wall(maze, current_cell, wall)) {
+    //     debug("this cell has west wall.");
+    // }
+    // wall = SOUTH;
+    // if (has_wall(maze, current_cell, wall)) {
+    //     debug("this cell has south wall.");
+    // }
+    return true;
+}
+
 /** Handle keyboard events when in the normal maze view:
  *
  *	-LEFT: Rotate the camera <code>EYE_THETA_INCR</code> degrees to the left.
@@ -253,20 +346,23 @@ void handle_special_key(int key, int x, int y) {
 			break;
 		case GLUT_KEY_RIGHT:
 			theta -= EYE_THETA_INCR;
-			if (theta < 0) theta += 360;
+		    if (theta < 0) theta += 360;
 			break;
 		case GLUT_KEY_UP:
-			camera_position.x += CAMERA_POSN_INCR * cos(D2R(theta));
-			camera_position.z += CAMERA_POSN_INCR * sin(D2R(-theta));
+            if (check_collision(Forward)) {
+			    camera_position.x += CAMERA_POSN_INCR * cos(D2R(theta));
+    			camera_position.z += CAMERA_POSN_INCR * sin(D2R(-theta));
+            }
 			break;
 		case GLUT_KEY_DOWN:
-			camera_position.x -= CAMERA_POSN_INCR * cos(D2R(theta));
-			camera_position.z -= CAMERA_POSN_INCR * sin(D2R(-theta));
+		    if (check_collision(Backward)) {
+			    camera_position.x -= CAMERA_POSN_INCR * cos(D2R(theta));
+    			camera_position.z -= CAMERA_POSN_INCR * sin(D2R(-theta));
+		    }
 			break;
 		default:
 			break;
 	}
-	
 	process_cell();
 	
 	set_camera_norm();
@@ -283,7 +379,6 @@ void handle_special_key(int key, int x, int y) {
  *	cell, set it as visited so that a breadcrumb will be drawn in it.
  */
 void process_cell() {
-	
 	// Get the current cell.
 	int r = floor(camera_position.z);
 	int c = floor(camera_position.x);
@@ -330,7 +425,6 @@ void handle_resize(int width, int height) {
 /** Animate a jump to the overhead view.
  */
 void animate_jump() {
-
 	debug("animate_jump()");
 
 	// If the y-coordinate of the camera is less than JUMP_HEIGHT,
@@ -349,13 +443,11 @@ void animate_jump() {
 		glutKeyboardFunc(handle_key_jumped);
 		glutIdleFunc(NULL);
 	}
-
 }
 
 /** Animate falling back to the normal in-maze view from the overhead view.
  */
 void animate_fall() {
-
 	debug("animate_fall()");
 
 	if (camera_position.y > NORM_HEIGHT) {
@@ -378,7 +470,6 @@ void animate_fall() {
  * view direction makes with the x axis).
  */
 void set_camera_norm() {
-	
 	debug("set_camera_norm()");
 
     // Set the camera transform.
@@ -386,13 +477,11 @@ void set_camera_norm() {
 	glLoadIdentity();
     glRotatef(360-(theta-90), 0.0, 1.0, 0.0);
     glTranslatef(-camera_position.x, -camera_position.y, -camera_position.z);
-
 }
 
 /** Set the camera transform for the 'jumped' overhead view.
  */
 void set_camera_jumped() {
-
 	debug("set_camera_jumped()");
 
 	glMatrixMode(GL_MODELVIEW);
@@ -407,7 +496,6 @@ void set_camera_jumped() {
  *  start and end cell pointers.
  */
 void initialize_maze() {
-
     maze = make_maze(maze_height, maze_width, time(NULL));
 	start = get_start(maze);
 	end = get_end(maze);
@@ -493,7 +581,6 @@ void gl_init() {
  * along the x-axis centered at the origin.
  */
 void draw_wall() {
-	
     // Specify the material for the wall.
 	set_material(&blue_plastic);
 
@@ -552,7 +639,6 @@ void draw_wall() {
  * @param material the material to use.
  */
 void draw_square(material_t *material) {
-
 	// Specify the material for the square.
 	set_material(material);
 
@@ -572,7 +658,6 @@ void draw_square(material_t *material) {
  * drawing any north or east walls of each cell.
  */
 void draw_maze() {
-
 	debug("draw_maze()");
 	
 	glMatrixMode(GL_MODELVIEW);
@@ -624,7 +709,6 @@ void draw_maze() {
  *		the_string - The string to display.
  */
 void draw_string(char *the_string) {
-	
 	for (int i=0; i<strlen(the_string); i++) {
 		glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, the_string[i]);
 	}
@@ -633,7 +717,6 @@ void draw_string(char *the_string) {
 /** Draw a green square marker on the start cell and a red one on the end cell.
  */
 void draw_start_end() {
-
 	glPushMatrix();
 	glTranslatef(start->c+0.5, 0.0, start->r+0.5);
 	glScalef(0.5, 0.0, 0.5);
@@ -650,7 +733,6 @@ void draw_start_end() {
 /** Draw square markers on the floor of all visited cells.
  */
 void draw_breadcrumbs() {
-
 	glMatrixMode(GL_MODELVIEW);
 
 	for (int i=0; i<maze_width; i++) {
@@ -669,7 +751,6 @@ void draw_breadcrumbs() {
 /** Print the position (camera_position) and heading (theta) of the player.
  */
 void print_position_heading() {
-
 	debug("print_position_heading()");
 	glColor3f(1.0f, 1.0f, 1.0f);
 
@@ -708,7 +789,6 @@ void set_visited(int r, int c) {
 /** Set a material as the current material.
  */
 void set_material(material_t *material) {
-
     glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, material->diffuse);
     glMaterialfv(GL_FRONT, GL_SPECULAR, material->specular);
     glMaterialf(GL_FRONT, GL_SHININESS, material->phong_exp);
@@ -723,3 +803,12 @@ void set_jump_look_at() {
 	jump_look_at.z = camera_position.z + sin(D2R(-theta));
 }
 
+cell_t* get_current_cell() {
+    int current_r = floor(camera_position.x);
+    int current_c = floor(camera_position.z);
+    return get_cell(maze, current_r, current_c);
+}
+
+float get_distance(point2_t* a, point2_t* b) {
+    return sqrt(pow(b->x - a->x, 2) + pow(b->z - a->z, 2));
+}
