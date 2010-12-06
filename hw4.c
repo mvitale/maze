@@ -86,6 +86,7 @@ void set_material(material_t*);
 
 typedef struct _light_t {
 	GLfloat position[4];
+    GLfloat direction[3];
 	GLfloat color[4];
 } light_t;
 
@@ -93,8 +94,9 @@ typedef struct _light_t {
 GLfloat BLACK[4] = {0.0, 0.0, 0.0, 1.0};
 
 light_t far_light = {
-    {0.0, 10.0, 0.0, 0.0},
-    {0.75, 0.75, 0.75, 1.0}
+    {2.0, 20.0, 2.0, 1.0}, // position
+    {0.4, -1.0, 0.4}, // direction
+    {1.0, 1.0, 1.0, 1.0} // color
 };
 
 material_t blue_plastic = {
@@ -155,7 +157,7 @@ void set_camera();
 void set_projection_viewport();
 bool is_collision(point3_t*);
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv) {	
 	// Parse the width and height of the maze.
 	maze_width = atoi(argv[1]);
 	maze_height = atoi(argv[2]);
@@ -177,7 +179,7 @@ int main(int argc, char **argv) {
 	glutSpecialFunc(handle_special_key);
 
 	// GL initialization.
-	gl_init();	
+	gl_init();
 
     // Application initialization.
     init();
@@ -195,12 +197,6 @@ int main(int argc, char **argv) {
  */
 void handle_display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    // Note that the lights are sent through the pipeline, and a light's
-    // position is modified by the model-view transformation.  By setting the
-    // light's position here, we ensure that the light lives in a fixed
-    // place in the world.  See set_lights() for more info.
-    glLightfv(GL_LIGHT0, GL_POSITION, far_light.position);
 
 	// Display the maze.
 	draw_maze();
@@ -493,10 +489,18 @@ void set_projection_viewport() {
 void set_lights() {
     debug("set_lights()");
 
-    light_t* light = &far_light;
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, light->color);
+    // Positions
+    glLightfv(GL_LIGHT0, GL_POSITION, far_light.position);
+    
+    // Directions
+    glLightfv(GL_LIGHT0, GL_SPOT_DIRECTION, far_light.direction);
+
+    // Colors
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, far_light.color);
     glLightfv(GL_LIGHT0, GL_AMBIENT, BLACK);
-    glLightfv(GL_LIGHT0, GL_SPECULAR, light->color);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, far_light.color);
+    
+    glLightf(GL_LIGHT0, GL_SPOT_CUTOFF, 75);
 }
 
 /** Create the maze and visited array, set the lights, and set the camera.
@@ -531,9 +535,8 @@ void gl_init() {
 	glCullFace(GL_FRONT);
 	glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
-    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
+    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 0);
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-
 }
 
 /** Draw a canonical rectangular solid of length 1, height 1, and width .25
@@ -618,7 +621,7 @@ void draw_floor() {
 	glPushMatrix();
 	glTranslatef(maze_height/2.0, 0.0, maze_width/2.0);
 	glScalef(maze_height/2.0, 1.0, maze_width/2.0);
-	draw_square(&blue_plastic);
+    // draw_square(&blue_plastic);
 	glPopMatrix();
 }
 
