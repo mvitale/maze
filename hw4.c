@@ -46,9 +46,9 @@ point3_t jump_look_at;	  // To be set at the beginning of every jump
 vector3_t up_dir = {0.0, 1.0, 0.0};
 #define EYE_THETA_INCR 5
 #define CAMERA_POSN_INCR 0.1
-#define JUMP_INCR 0.05
+#define JUMP_INCR 0.1
 #define NORM_HEIGHT 0.75
-#define JUMP_HEIGHT 20.0
+#define JUMP_HEIGHT 19.5
 #define COLLISION_THRESHOLD 0.25f
 
 #define D2R(x) ((x)*M_PI/180.0)
@@ -108,20 +108,6 @@ material_t blue_plastic = {
     1000.0f
 };
 
-material_t start_square_material = {
-	{0.0f, 10.0f, 0.0f, 1.0f},
-	{0.0f, 10.0f, 0.0f, 1.0f},
-	{0.0f, 0.0f, 0.0f, 0.0f},
-	0.0f
-};
-
-material_t end_square_material = {
-	{10.0f, 0.0f, 0.0f, 1.0f},
-	{10.0f, 0.0f, 0.0f, 1.0f},
-	{0.0f, 0.0f, 0.0f, 0.0f},
-	0.0f
-};
-
 material_t bright_gold = {
 	{0.0f, 0.0f, 0.0f, 1.0f},
 	{10.0f, 10.0f, 0.0f, 1.0f},
@@ -166,9 +152,9 @@ void print_position_heading();
 bool is_visited(int, int);
 void process_cell();
 void set_visited(int, int);
+void set_lights();
 void set_jump_look_at();
-void set_camera_norm();
-void set_camera_jumped();
+void set_camera();
 void set_projection_viewport();
 cell_t* get_current_cell();
 bool check_collision(Movement_Direction dir);
@@ -183,9 +169,8 @@ int main(int argc, char **argv) {
 	// Initialize the drawing window.
 	glutInitWindowSize(DEFAULT_WIN_WIDTH, DEFAULT_WIN_HEIGHT);
 	glutInitWindowPosition(0, 0);
-	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH); // Double buffering
-															  // seems to make the
-															  // animation smoother.
+	// Double buffering seems to make the animation smoother, so use it.
+	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGB | GLUT_DEPTH); 
 	glutInit(&argc, argv);
 
 	// Create the main window.
@@ -211,11 +196,18 @@ int main(int argc, char **argv) {
 
 // GLUT CALLBACKS.
 
-/** Handle a display request by clearing the screen.
+/** Handle a display request by clearing the screen, drawing the maze, and
+ * printing the player's position and heading.
  */
 void handle_display() {
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // Note that the lights are sent through the pipeline, and a light's
+    // position is modified by the model-view transformation.  By setting the
+    // light's position here, we ensure that the light lives in a fixed
+    // place in the world.  See set_lights() for more info.
+    glLightfv(GL_LIGHT0, GL_POSITION, far_light.position);
 
 	// Display the maze.
 	draw_maze();
@@ -227,9 +219,10 @@ void handle_display() {
 	glutSwapBuffers();
 }
 
-/** Handle keyboard events when in the normal maze view:
+/** Handle keyboard events when in the normal in-maze view:
  *  
- *  - SPACE: Animate jumping to an overhead view of the maze. Movement is disabled
+ *  - SPACE: Animate jumping to an overhead view of the maze. Movement 
+ *			 is	disabled
  *			 until the player switches back to the in-maze view.
  *
  *  @param key the key that was pressed.
@@ -237,17 +230,14 @@ void handle_display() {
  *  @param y the mouse y-position when <code>key</code> was pressed.
  */
 void handle_key_norm(unsigned char key, int x, int y) {
+
 	debug("handle_key_norm()");
 
-    switch (key) {
-        case ' ':
-			glutKeyboardFunc(NULL);
-			glutSpecialFunc(NULL);
-			set_jump_look_at();
-			glutIdleFunc(animate_jump);
-            break;
-        default:
-            break;
+    if (key == ' ') {
+		glutKeyboardFunc(NULL);
+		glutSpecialFunc(NULL);
+		set_jump_look_at();
+		glutIdleFunc(animate_jump);
     }
 }
 
@@ -305,14 +295,15 @@ bool check_collision(Movement_Direction dir) {
  *
  *	-LEFT: Rotate the camera <code>EYE_THETA_INCR</code> degrees to the left.
  *	-RIGHT: Rotate the camera <code>EYE_THETA_INCR</code> degrees to the right.
- *	-UP: Move the camera forward.
- *	-DOWN: Move the camera backwards.
+ *	-UP: Move the camera forward if possible.
+ *	-DOWN: Move the camera backwards if possible.
  *
  *	@param key the key that was pressed.
  *	@param x the mouse x-position when <code>key</code> was pressed.
  *	@param y the mouse y-position when <code>key</code> was pressed.
  */
 void handle_special_key(int key, int x, int y) {
+
 	switch (key) {
 		case GLUT_KEY_LEFT:
 			theta += EYE_THETA_INCR;
@@ -337,9 +328,11 @@ void handle_special_key(int key, int x, int y) {
 		default:
 			break;
 	}
+
 	process_cell();
 	
-	set_camera_norm();
+	set_camera();
+
 	glutPostRedisplay();
 }
 
@@ -354,8 +347,8 @@ void handle_special_key(int key, int x, int y) {
  */
 void process_cell() {
 	// Get the current cell.
-	int r = floor(camera_position.z);
-	int c = floor(camera_position.x);
+	int r = floor(camera_position.x);
+	int c = floor(camera_position.z);
 	cell_t *cell = get_cell(maze, r, c);
 	
 	// If this is a newly visited cell that isn't the start or end cell, 
@@ -419,7 +412,9 @@ void animate_jump() {
 	}
 }
 
-/** Animate falling back to the normal in-maze view from the overhead view.
+/** Animate falling back to the normal in-maze view from the overhead view,
+ * then unregister the idle callback and set the keyboard callbacks to return 
+ * control to the player.
  */
 void animate_fall() {
 	debug("animate_fall()");
@@ -441,29 +436,16 @@ void animate_fall() {
 
 /** Set the camera transform. The viewpoint is given by the eye coordinates,
  * and we look in angle theta-90 around the y-axis (theta is the angle the
- * view direction makes with the x axis).
+ * view direction makes with the x-axis).
  */
-void set_camera_norm() {
-	debug("set_camera_norm()");
+void set_camera() {
+	debug("set_camera()");
 
     // Set the camera transform.
 	glMatrixMode(GL_MODELVIEW);
 	glLoadIdentity();
     glRotatef(360-(theta-90), 0.0, 1.0, 0.0);
     glTranslatef(-camera_position.x, -camera_position.y, -camera_position.z);
-}
-
-/** Set the camera transform for the 'jumped' overhead view.
- */
-void set_camera_jumped() {
-	debug("set_camera_jumped()");
-
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-	gluLookAt(camera_position.x, JUMP_HEIGHT, camera_position.z, 
-		camera_position.x+cos(D2R(theta)), camera_position.y,
-		camera_position.z+sin(D2R(-theta)),
-		up_dir.x, up_dir.y, up_dir.z);
 }
 
 /*  Initialize the maze by building all possible walls and set the global
@@ -497,13 +479,9 @@ void set_projection_viewport() {
  *  is subject to the current model-view transform, and we have
  *  specified the light position in world-frame coordinates,
  *  we want to set the light position after setting the camera
- *  transformation;since the camera transformation may change in response
+ *  transformation; since the camera transformation may change in response
  *  to keyboard events, we ensure this by setting the light position
  *  in the display callback.
- *
- *  It is also easy to "attach" a light to the viewer.  In that case,
- *  just specify the light position in the camera frame and make sure
- *  to set its position while the camera transformation is the identity!
  */
 void set_lights() {
     debug("set_lights()");
@@ -527,14 +505,14 @@ void init() {
     theta = 0;
 	cell_t *start = get_start(maze);
 	
-    camera_position.x = start->c+0.5;
+    camera_position.x = start->r+0.5;
     camera_position.y = NORM_HEIGHT;
-    camera_position.z = start->r+0.5;
-
-    set_lights();
+    camera_position.z = start->c+0.5;
 
     // Set the viewpoint.
-    set_camera_norm();
+    set_camera();
+
+	set_lights();
 }
 
 /** Basic GL initialization.
@@ -692,13 +670,13 @@ void draw_string(char *the_string) {
  */
 void draw_start_end() {
 	glPushMatrix();
-	glTranslatef(start->c+0.5, 0.0, start->r+0.5);
+	glTranslatef(start->r+0.5, 0.0, start->c+0.5);
 	glScalef(0.5, 0.0, 0.5);
 	draw_square(&bright_green);
 	glPopMatrix();
 	
 	glPushMatrix();
-	glTranslatef(end->c+0.5, 0.0, end->r+0.5);
+	glTranslatef(end->r+0.5, 0.0, end->c+0.5);
 	glScalef(0.5, 0.0, 0.5);
 	draw_square(&bright_red);
 	glPopMatrix();
@@ -711,7 +689,7 @@ void draw_breadcrumbs() {
 
 	for (int i=0; i<maze_width; i++) {
 		for (int j=0; j<maze_height; j++) {
-			if (is_visited(i, j)) {
+			if (is_visited(j, i)) {
 				glPushMatrix();
 				glTranslatef(j+.5, 0.0, i+.5);
 				glScalef(.25, 1.0, .25);
@@ -741,7 +719,7 @@ void print_position_heading() {
 	free(s);
 }
 
-/** Determine whether or not a given cell in the maze has been visted or not.
+/** Determine whether or not a given cell in the maze has been visted.
  *
  * @param r the row of the cell.
  * @param c the column of the cell.
