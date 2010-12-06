@@ -619,6 +619,15 @@ void draw_square(material_t *material) {
 	glEnd();
 }
 
+void draw_floor() {
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glTranslatef(maze_height/2.0, 0.0, maze_width/2.0);
+	glScalef(maze_height/2.0, 1.0, maze_width/2.0);
+	draw_square(&blue_plastic);
+	glPopMatrix();
+}
+
 /** Draw the maze by first drawing the west and south exterior walls, then
  * drawing any north or east walls of each cell.
  */
@@ -632,6 +641,9 @@ void draw_maze() {
 
 	// Draw the breadcrumbs.
 	draw_breadcrumbs();	
+
+	// Draw the floor.
+	draw_floor();
 	
 	// Draw the west and south exterior walls. 
 	glPushMatrix();
