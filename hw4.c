@@ -241,10 +241,7 @@ void handle_key_norm(unsigned char key, int x, int y) {
     }
 }
 
-bool check_collision(Movement_Direction dir) {
-    // Get current cell.
-    cell_t *current_cell = get_current_cell();
-    
+bool check_collision(Movement_Direction dir) {    
     // Calculate where the camera will be after moving in Direction dir.
     point2_t increment;
     increment.x = CAMERA_POSN_INCR * cos(D2R(theta));
@@ -262,17 +259,12 @@ bool check_collision(Movement_Direction dir) {
     int new_c = floor(new_position.z);
     cell_t *new_cell = get_cell(maze, new_r, new_c);
     
-    // If the cells are different, return false immediately.
-    // if ((current_cell->r != new_cell->r) || (current_cell->c != new_cell->c)) {
-    //     return false;
-    // }
-    
     unsigned char possible_walls[] = {NORTH, EAST, SOUTH, WEST};
     int possible_walls_length = 4;
     for (int i = 0; i < possible_walls_length; i++) {
         unsigned char current_wall = possible_walls[i];
         if (has_wall(maze, new_cell, current_wall)) {
-            point2_t wall_point;
+                point2_t wall_point;
             switch (current_wall) {
                 case NORTH:
                     wall_point.x = new_cell->r + 1;
@@ -297,24 +289,6 @@ bool check_collision(Movement_Direction dir) {
             }
         }
     }
-    
-    // unsigned char wall = NORTH;
-    // if (has_wall(maze, current_cell, wall)) {
-    //     debug("this cell has north wall");
-    // }
-    // wall = EAST;
-    // if (has_wall(maze, current_cell, wall)) {
-    //     debug("this cell has east wall.");
-    // }
-    // wall = WEST;
-    // if (has_wall(maze, current_cell, wall)) {
-    //     debug("this cell has west wall.");
-    // }
-    // wall = SOUTH;
-    // if (has_wall(maze, current_cell, wall)) {
-    //     debug("this cell has south wall.");
-    // }
-    return true;
 }
 
 /** Handle keyboard events when in the normal maze view:
@@ -791,12 +765,6 @@ void set_jump_look_at() {
 	jump_look_at.x = camera_position.x + cos(D2R(theta));
 	jump_look_at.y = camera_position.y;
 	jump_look_at.z = camera_position.z + sin(D2R(-theta));
-}
-
-cell_t* get_current_cell() {
-    int current_r = floor(camera_position.x);
-    int current_c = floor(camera_position.z);
-    return get_cell(maze, current_r, current_c);
 }
 
 float get_distance(point2_t* a, point2_t* b) {
