@@ -152,6 +152,7 @@ void print_position_heading();
 bool is_visited(int, int);
 void process_cell();
 void set_visited(int, int);
+void set_lights();
 void set_jump_look_at();
 void set_camera();
 void set_projection_viewport();
@@ -201,6 +202,12 @@ int main(int argc, char **argv) {
 void handle_display() {
 
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    // Note that the lights are sent through the pipeline, and a light's
+    // position is modified by the model-view transformation.  By setting the
+    // light's position here, we ensure that the light lives in a fixed
+    // place in the world.  See set_lights() for more info.
+    glLightfv(GL_LIGHT0, GL_POSITION, far_light.position);
 
 	// Display the maze.
 	draw_maze();
@@ -498,13 +505,9 @@ void set_projection_viewport() {
  *  is subject to the current model-view transform, and we have
  *  specified the light position in world-frame coordinates,
  *  we want to set the light position after setting the camera
- *  transformation;since the camera transformation may change in response
+ *  transformation; since the camera transformation may change in response
  *  to keyboard events, we ensure this by setting the light position
  *  in the display callback.
- *
- *  It is also easy to "attach" a light to the viewer.  In that case,
- *  just specify the light position in the camera frame and make sure
- *  to set its position while the camera transformation is the identity!
  */
 void set_lights() {
     debug("set_lights()");
@@ -532,10 +535,10 @@ void init() {
     camera_position.y = NORM_HEIGHT;
     camera_position.z = start->c+0.5;
 
-    set_lights();
-
     // Set the viewpoint.
     set_camera();
+
+	set_lights();
 }
 
 /** Basic GL initialization.
