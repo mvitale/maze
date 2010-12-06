@@ -80,6 +80,7 @@ void set_material(material_t*);
 
 typedef struct _light_t {
 	GLfloat position[4];
+    GLfloat direction[3];
 	GLfloat color[4];
 } light_t;
 
@@ -97,8 +98,15 @@ typedef struct {
 GLfloat BLACK[4] = {0.0, 0.0, 0.0, 1.0};
 
 light_t far_light = {
-    {20.0, 10.0, 0.0, 0.0},
-    {0.75, 0.75, 0.75, 1.0}
+    {0.0, 10.0, 0.0, 1.0}, // position
+    {1.0, 1.0, 0.0}, // direction
+    {1.0, 0.0, 0.0, 1.0} // color
+};
+
+light_t far_light_2 = {
+    {0.0, 10.0, 10.0, 0.0}, // position
+    {0.0, 1.0, 0.0}, // direction
+    {0.0, 0.0, 0.0, 1.0} // color
 };
 
 material_t blue_plastic = {
@@ -160,8 +168,7 @@ cell_t* get_current_cell();
 bool check_collision(Movement_Direction dir);
 float get_distance(point2_t* a, point2_t* b);
 
-int main(int argc, char **argv) {
-	
+int main(int argc, char **argv) {	
 	// Parse the width and height of the maze.
 	maze_width = atoi(argv[1]);
 	maze_height = atoi(argv[2]);
@@ -183,7 +190,7 @@ int main(int argc, char **argv) {
 	glutSpecialFunc(handle_special_key);
 
 	// GL initialization.
-	gl_init();	
+	gl_init();
 
     // Application initialization.
     init();
@@ -200,7 +207,6 @@ int main(int argc, char **argv) {
  * printing the player's position and heading.
  */
 void handle_display() {
-
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Note that the lights are sent through the pipeline, and a light's
@@ -208,6 +214,7 @@ void handle_display() {
     // light's position here, we ensure that the light lives in a fixed
     // place in the world.  See set_lights() for more info.
     glLightfv(GL_LIGHT0, GL_POSITION, far_light.position);
+    glLightfv(GL_LIGHT1, GL_POSITION, far_light_2.position);
 
 	// Display the maze.
 	draw_maze();
@@ -230,7 +237,6 @@ void handle_display() {
  *  @param y the mouse y-position when <code>key</code> was pressed.
  */
 void handle_key_norm(unsigned char key, int x, int y) {
-
 	debug("handle_key_norm()");
 
     if (key == ' ') {
@@ -289,6 +295,7 @@ bool check_collision(Movement_Direction dir) {
             }
         }
     }
+    return true;
 }
 
 /** Handle keyboard events when in the normal maze view:
@@ -303,7 +310,6 @@ bool check_collision(Movement_Direction dir) {
  *	@param y the mouse y-position when <code>key</code> was pressed.
  */
 void handle_special_key(int key, int x, int y) {
-
 	switch (key) {
 		case GLUT_KEY_LEFT:
 			theta += EYE_THETA_INCR;
@@ -486,10 +492,16 @@ void set_projection_viewport() {
 void set_lights() {
     debug("set_lights()");
 
-    light_t* light = &far_light;
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, light->color);
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, far_light.color);
     glLightfv(GL_LIGHT0, GL_AMBIENT, BLACK);
-    glLightfv(GL_LIGHT0, GL_SPECULAR, light->color);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, far_light.color);
+    glLightfv(GL_LIGHT1, GL_DIFFUSE, far_light_2.color);
+    glLightfv(GL_LIGHT1, GL_AMBIENT, BLACK);
+    glLightfv(GL_LIGHT1, GL_SPECULAR, far_light_2.color);
+    
+    // Directions
+    glLightfv(GL_LIGHT0, GL_SPOT_DIRECTION, far_light.direction);
+    glLightfv(GL_LIGHT1, GL_SPOT_DIRECTION, far_light_2.direction);
 }
 
 /** Create the maze and visited array, set the lights, and set the camera.
@@ -524,6 +536,7 @@ void gl_init() {
 	glCullFace(GL_FRONT);
 	glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
+    glEnable(GL_LIGHT1);
     glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
