@@ -82,7 +82,6 @@ typedef enum _movement_dir_t {
 } movement_dir_t;
 
 // Material setting function.
-void set_material(material_t*);
 
 typedef struct _light_t {
 	GLfloat position[4];
@@ -128,34 +127,40 @@ material_t bright_red = {
 };
 
 // Callbacks.
-void handle_display(void);
-void handle_resize(int, int);
-void handle_key_norm(unsigned char, int, int);
-void handle_key_jumped(unsigned char, int, int);
-void handle_special_key(int, int, int);
-
-// Application functions.
-void init();
-void gl_init();
-void initialize_maze();
-void draw_wall();
-void draw_cube();
-void draw_start_end();
-void draw_breadcrumbs();
-void draw_maze();
-void draw_string(char*);
-void get_new_posn(movement_dir_t, point3_t*);
 void animate_jump();
 void animate_fall();
-void print_position_heading();
-bool is_visited(int, int);
-void process_cell();
-void set_visited(int, int);
-void set_lights();
-void set_jump_look_at();
-void set_camera();
-void set_projection_viewport();
+void handle_display(void);
+void handle_key_norm(unsigned char, int, int);
+void handle_key_jumped(unsigned char, int, int);
+void handle_resize(int, int);
+void handle_special_key(int, int, int);
+
+// Initialization functions.
+void gl_init();
+void init();
+void initialize_maze();
+
+// Application functions.
+void draw_breadcrumbs();
+void draw_maze();
+void draw_square(material_t*);
+void draw_start_end();
+void draw_string(char*);
+void draw_wall();
+void get_new_posn(movement_dir_t, point3_t*);
 bool is_collision(point3_t*);
+bool is_visited(int, int);
+void print_position_heading();
+void process_cell();
+void set_camera();
+void set_jump_look_at();
+void set_lights();
+void set_material(material_t*);
+void set_projection_viewport();
+void set_visited(int, int);
+
+// XXX: SHOULD WE KEEP THIS??? AT THE VERY LEAST WE NEED TO CHANGE THE MATERIAL
+void draw_floor();
 
 int main(int argc, char **argv) {	
 	// Parse the width and height of the maze.
@@ -191,6 +196,50 @@ int main(int argc, char **argv) {
 }
 
 // GLUT CALLBACKS.
+
+/** Animate falling back to the normal in-maze view from the overhead view.
+ */
+void animate_fall() {
+	debug("animate_fall()");
+
+	if (camera_position.y > NORM_HEIGHT) {
+		glMatrixMode(GL_MODELVIEW);
+		glLoadIdentity();
+		camera_position.y -= JUMP_INCR;
+		gluLookAt(camera_position.x, camera_position.y, camera_position.z,
+				  jump_look_at.x, jump_look_at.y, jump_look_at.z,
+				  up_dir.x, up_dir.y, up_dir.z);
+		glutPostRedisplay();
+	} else {
+		// Unregister the idle callback and return control to the player.
+		glutKeyboardFunc(handle_key_norm);
+		glutSpecialFunc(handle_special_key);
+		glutIdleFunc(NULL);
+	}
+}
+
+/** Animate jumping to the overhead view.
+ */
+void animate_jump() {
+	debug("animate_jump()");
+
+	// If the y-coordinate of the camera is less than JUMP_HEIGHT,
+	// increment it by JUMP_INCR and redisplay. Otherwise, we're done animating,
+	// so unregister the idle callback and set the keyboard callback to allow
+	// the player to return to the normal view.
+	if (camera_position.y < JUMP_HEIGHT) {
+		glMatrixMode(GL_MODELVIEW);
+		glLoadIdentity();
+		camera_position.y += JUMP_INCR;
+		gluLookAt(camera_position.x, camera_position.y, camera_position.z,
+				  jump_look_at.x, jump_look_at.y, jump_look_at.z,
+				  up_dir.x, up_dir.y, up_dir.z);
+		glutPostRedisplay();
+	} else {
+		glutKeyboardFunc(handle_key_jumped);
+		glutIdleFunc(NULL);
+	}
+}
 
 /** Handle a display request by clearing the screen, drawing the maze, and
  * printing the player's position and heading.
@@ -229,49 +278,20 @@ void handle_key_norm(unsigned char key, int x, int y) {
     }
 }
 
-/** Check if a point collides with any walls.
+/** Handle keyboard events when in the overhead view:
+ *  
+ *  - SPACE: Animate falling back into the maze.
  *
- * @param posn the point for which to check collision.
- * @return true if the point collides with any walls, false otherwise.
+ *  @param key the key that was pressed.
+ *  @param x the mouse x-position when <code>key</code> was pressed.
+ *  @param y the mouse y-position when <code>key</code> was pressed.
  */
-bool is_collision(point3_t *posn) {    
-    // Get the cell in which posn is located.
-    int r = floor(posn->x);
-    int c = floor(posn->z);
-    cell_t *cell = get_cell(maze, r, c);
-
-	// Iterate through all wall directions and check collision with each
-	// wall that this cell has. If posn collides with any of them,
-	// return true.
-	unsigned char current_dir;
-	point3_t closest_wall_pt = {0.0, NORM_HEIGHT, 0.0};
-	for (int i=0; i<NUM_WALL_DIRS; i++) {
-		current_dir = wall_dirs[i];
-		if (has_wall(maze, cell, current_dir)) {
-			switch(current_dir) {
-				case NORTH:
-					closest_wall_pt.x = cell->r+1-WALL_THICKNESS;
-					closest_wall_pt.z = posn->z;
-					break;
-				case SOUTH:
-					closest_wall_pt.x = cell->r+WALL_THICKNESS;
-					closest_wall_pt.z = posn->z;
-					break;
-				case EAST:
-					closest_wall_pt.x = posn->x;
-					closest_wall_pt.z = cell->c+1-WALL_THICKNESS;
-					break;
-				case WEST:
-					closest_wall_pt.x = posn->x;
-					closest_wall_pt.z = cell->c+WALL_THICKNESS;
-			}
-			if (dist(posn, &closest_wall_pt) < COLLISION_THRESHOLD)
-				return true;
-		}
+void handle_key_jumped(unsigned char key, int x, int y) {
+	debug("handle_key_jumped");
+	if (key == ' ') {
+		debug("Space pressed");
+		glutIdleFunc(animate_fall);
 	}
-	// We've checked all the walls without returning, so
-	// there are no collisions.
-	return false;
 }
 
 /** Handle keyboard events when in the normal maze view:
@@ -318,66 +338,6 @@ void handle_special_key(int key, int x, int y) {
 	glutPostRedisplay();
 }
 
-/** Set a <code>point3_t</code> representing the result of moving the camera
- * <code>CAMERA_POSN_INCR</code> forward or backward.
- *
- * @param dir the direction.
- * @param new_posn the <code>point3_t</code> to be filled in with the result of
- *		moving <code>CAMERA_POSN_INCR</code> in direction <code>dir</code>.
- */
-void get_new_posn(movement_dir_t dir, point3_t *new_posn) {
-	float x_incr = CAMERA_POSN_INCR*cos(D2R(theta));
-	float z_incr = CAMERA_POSN_INCR*sin(D2R(-theta));
-	new_posn->y = camera_position.y;
-
-	if (dir == Forward) {
-		new_posn->x = camera_position.x+x_incr;
-		new_posn->z = camera_position.z+z_incr;
-	} else {
-		new_posn->x = camera_position.x-x_incr;
-		new_posn->z = camera_position.z-z_incr;
-	}
-}
-
-/** Determine if the current cell is the end cell or if it is a newly visited
- *	cell. 
- *
- *	XXX: NOT YET IMPLEMENTED If it is the end cell, print a message to that 
- *	effect and give the player the choice to play another maze. 
- *
- *	IMPLEMENTED: If it is a newly visited cell that isn't the start or end 
- *	cell, set it as visited so that a breadcrumb will be drawn in it.
- */
-void process_cell() {
-	// Get the current cell.
-	int r = floor(camera_position.x);
-	int c = floor(camera_position.z);
-	cell_t *cell = get_cell(maze, r, c);
-	
-	// If this is a newly visited cell that isn't the start or end cell, 
-	// set it as visited.
-	if (!is_visited(r, c) && cell_cmp(cell, start) != 0 && 
-			cell_cmp(cell, end) != 0) { 
-		set_visited(r, c);
-	}
-}
-
-/** Handle keyboard events when in the overhead view:
- *  
- *  - SPACE: Animate falling back into the maze.
- *
- *  @param key the key that was pressed.
- *  @param x the mouse x-position when <code>key</code> was pressed.
- *  @param y the mouse y-position when <code>key</code> was pressed.
- */
-void handle_key_jumped(unsigned char key, int x, int y) {
-	debug("handle_key_jumped");
-	if (key == ' ') {
-		debug("Space pressed");
-		glutIdleFunc(animate_fall);
-	}
-}
-
 /** Handle a resize event by recording the new width and height.
  *  
  *  @param width the new width of the window.
@@ -392,139 +352,10 @@ void handle_resize(int width, int height) {
     glutPostRedisplay();
 }
 
-/** Animate a jump to the overhead view.
- */
-void animate_jump() {
-	debug("animate_jump()");
 
-	// If the y-coordinate of the camera is less than JUMP_HEIGHT,
-	// increment it by JUMP_INCR and redisplay. Otherwise, we're done animating,
-	// so unregister the idle callback and set the keyboard callback to allow
-	// the player to return to the normal view.
-	if (camera_position.y < JUMP_HEIGHT) {
-		glMatrixMode(GL_MODELVIEW);
-		glLoadIdentity();
-		camera_position.y += JUMP_INCR;
-		gluLookAt(camera_position.x, camera_position.y, camera_position.z,
-				  jump_look_at.x, jump_look_at.y, jump_look_at.z,
-				  up_dir.x, up_dir.y, up_dir.z);
-		glutPostRedisplay();
-	} else {
-		glutKeyboardFunc(handle_key_jumped);
-		glutIdleFunc(NULL);
-	}
-}
 
-/** Animate falling back to the normal in-maze view from the overhead view,
- * then unregister the idle callback and set the keyboard callbacks to return 
- * control to the player.
- */
-void animate_fall() {
-	debug("animate_fall()");
 
-	if (camera_position.y > NORM_HEIGHT) {
-		glMatrixMode(GL_MODELVIEW);
-		glLoadIdentity();
-		camera_position.y -= JUMP_INCR;
-		gluLookAt(camera_position.x, camera_position.y, camera_position.z,
-				  jump_look_at.x, jump_look_at.y, jump_look_at.z,
-				  up_dir.x, up_dir.y, up_dir.z);
-		glutPostRedisplay();
-	} else {
-		glutKeyboardFunc(handle_key_norm);
-		glutSpecialFunc(handle_special_key);
-		glutIdleFunc(NULL);
-	}
-}
-
-/** Set the camera transform. The viewpoint is given by the eye coordinates,
- * and we look in angle theta-90 around the y-axis (theta is the angle the
- * view direction makes with the x-axis).
- */
-void set_camera() {
-	debug("set_camera()");
-
-    // Set the camera transform.
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
-    glRotatef(360-(theta-90), 0.0, 1.0, 0.0);
-    glTranslatef(-camera_position.x, -camera_position.y, -camera_position.z);
-}
-
-/*  Initialize the maze by building all possible walls and set the global
- *  start and end cell pointers.
- */
-void initialize_maze() {
-    maze = make_maze(maze_height, maze_width, time(NULL));
-	start = get_start(maze);
-	end = get_end(maze);
-}
-
-/** Set the projection and viewport transformations.  We use perspective
- *  projection and always match the aspect ratio of the screen window
- *  with vertical field-of-view 60 degrees and always map to the entire
- *  screen window.
- */
-void set_projection_viewport() {
-    debug("set_projection_viewport");
-    
-	// Set perspective projection transform.
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	gluPerspective(60.0, (GLdouble)win_width/win_height, view_plane_near,
-			view_plane_far);
-
-	// Set the viewport transform.
-	glViewport(0, 0, win_width, win_height);	
-}
-
-/** Set the light colors.  Since the position of the light
- *  is subject to the current model-view transform, and we have
- *  specified the light position in world-frame coordinates,
- *  we want to set the light position after setting the camera
- *  transformation; since the camera transformation may change in response
- *  to keyboard events, we ensure this by setting the light position
- *  in the display callback.
- */
-void set_lights() {
-    debug("set_lights()");
-
-    // Positions
-    glLightfv(GL_LIGHT0, GL_POSITION, far_light.position);
-    
-    // Directions
-    glLightfv(GL_LIGHT0, GL_SPOT_DIRECTION, far_light.direction);
-
-    // Colors
-    glLightfv(GL_LIGHT0, GL_DIFFUSE, far_light.color);
-    glLightfv(GL_LIGHT0, GL_AMBIENT, BLACK);
-    glLightfv(GL_LIGHT0, GL_SPECULAR, far_light.color);
-    
-    glLightf(GL_LIGHT0, GL_SPOT_CUTOFF, 75);
-}
-
-/** Create the maze and visited array, set the lights, and set the camera.
- */
-void init() {
-    debug("init()");
-
-	initialize_maze();
-	visited = calloc(maze_width*maze_height, sizeof(bool));
-	debug("total cells: %d", maze_width*maze_height);
-
-    // Viewpoint position.
-    theta = 0;
-	cell_t *start = get_start(maze);
-	
-    camera_position.x = start->r+0.5;
-    camera_position.y = NORM_HEIGHT;
-    camera_position.z = start->c+0.5;
-
-    // Set the viewpoint.
-    set_camera();
-
-	set_lights();
-}
+// INITIALIZATION FUNCTIONS
 
 /** Basic GL initialization.
  */
@@ -537,6 +368,157 @@ void gl_init() {
     glEnable(GL_LIGHT0);
     glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 0);
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
+}
+
+/** Create the maze and visited array, set the lights, and set the camera.
+ */
+void init() {
+    debug("init()");
+
+	initialize_maze();
+	visited = calloc(maze_width*maze_height, sizeof(bool));
+	debug("total cells: %d", maze_width*maze_height);
+
+	cell_t *start = get_start(maze);
+
+	// Viewpoint position.
+    theta = 0;
+    camera_position.x = start->r+0.5;
+    camera_position.y = NORM_HEIGHT;
+    camera_position.z = start->c+0.5;
+
+    // Set the viewpoint.
+    set_camera();
+
+	// Set the lights
+	set_lights();
+}
+
+/*  Initialize the maze by building all possible walls and set the global
+ *  start and end cell pointers.
+ */
+void initialize_maze() {
+    maze = make_maze(maze_height, maze_width, time(NULL));
+	start = get_start(maze);
+	end = get_end(maze);
+}
+
+// APPLICATION FUNCTIONS
+
+/** Draw bright gold square markers on the floor of all visited cells.
+ */
+void draw_breadcrumbs() {
+	glMatrixMode(GL_MODELVIEW);
+
+	for (int i=0; i<maze_width; i++) {
+		for (int j=0; j<maze_height; j++) {
+			if (is_visited(j, i)) {
+				glPushMatrix();
+				glTranslatef(j+.5, 0.0, i+.5);
+				glScalef(.25, 1.0, .25);
+				draw_square(&bright_gold);
+				glPopMatrix();
+			}
+		}
+	}
+}
+
+/** Draw the maze by first drawing the west and south exterior walls, then
+ * drawing any north or east walls of each cell.
+ */
+void draw_maze() {
+	debug("draw_maze()");
+	
+	glMatrixMode(GL_MODELVIEW);
+
+	// Draw the start and end cell markers.
+	draw_start_end();
+
+	// Draw the breadcrumbs.
+	draw_breadcrumbs();	
+
+	// Draw the floor.
+	draw_floor();
+	
+	// Draw the west and south exterior walls. 
+	glPushMatrix();
+	glTranslatef(maze_height/2.0, 0.5, 0.0);
+	glScalef(maze_height+0.25, 1.0, 1.0);
+	draw_wall();
+	glPopMatrix();
+	glPushMatrix();
+	glTranslatef(0.0, 0.5, maze_width/2.0);
+	glScalef(1.0, 1.0, maze_width+0.25);
+	glRotatef(90, 0.0, 1.0, 0.0);
+	draw_wall();
+	glPopMatrix();
+
+	// Draw any north or east walls of each cell.
+	for (int i=0; i<maze_width; i++) {
+		for (int j=0; j<maze_height; j++) {
+			if (has_wall(maze, get_cell(maze, j, i), NORTH)) {
+				glPushMatrix();
+				glTranslatef(j+1, 0.5, i+0.5);
+				glScalef(1.0, 1.0, 1.25);
+				glRotatef(90, 0.0, 1.0, 0.0);
+				draw_wall();
+				glPopMatrix();
+			}
+			if (has_wall(maze, get_cell(maze, j, i), EAST)) {
+				glPushMatrix();
+				glTranslatef(j+0.5, 0.5, i+1);
+				glScalef(1.25, 1.0, 1.0);
+				draw_wall();
+				glPopMatrix();
+			}
+		}
+	}
+}
+
+/** Draw a sqaure of side length 2 in the xz plane centered at the origin
+ *
+ * @param material the material to use.
+ */
+void draw_square(material_t *material) {
+	// Specify the material for the square.
+	set_material(material);
+
+	// Draw the square.
+	glBegin(GL_QUADS);
+
+	glNormal3f(0.0, 1.0, 0.0);
+	glVertex3f(1.0, 0.0, 1.0);
+	glVertex3f(-1.0, 0.0, 1.0);
+	glVertex3f(-1.0, 0.0, -1.0);
+	glVertex3f(1.0, 0.0, -1.0);
+
+	glEnd();
+}
+
+/** Draw a green square marker on the start cell and a red one on the end cell.
+ */
+void draw_start_end() {
+	glPushMatrix();
+	glTranslatef(start->r+0.5, 0.0, start->c+0.5);
+	glScalef(0.5, 0.0, 0.5);
+	draw_square(&bright_green);
+	glPopMatrix();
+	
+	glPushMatrix();
+	glTranslatef(end->r+0.5, 0.0, end->c+0.5);
+	glScalef(0.5, 0.0, 0.5);
+	draw_square(&bright_red);
+	glPopMatrix();
+}
+
+/* Draw a string at the current raster position.
+ * 
+ *@param the_string the string to display.
+ */
+void draw_string(char *the_string) {
+	for (int i=0; i<strlen(the_string); i++) {
+		glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, the_string[i]);
+	}
 }
 
 /** Draw a canonical rectangular solid of length 1, height 1, and width .25
@@ -596,129 +578,79 @@ void draw_wall() {
 	glEnd();
 }
 
-/** Draw a sqaure of side length 2 in the xz plane centered at the origin
+/** Set a <code>point3_t</code> representing the result of moving the camera
+ * <code>CAMERA_POSN_INCR</code> forward or backward.
  *
- * @param material the material to use.
+ * @param dir the direction.
+ * @param new_posn the <code>point3_t</code> to be filled in with the result of
+ *		moving <code>CAMERA_POSN_INCR</code> in direction <code>dir</code>.
  */
-void draw_square(material_t *material) {
-	// Specify the material for the square.
-	set_material(material);
+void get_new_posn(movement_dir_t dir, point3_t *new_posn) {
+	float x_incr = CAMERA_POSN_INCR*cos(D2R(theta));
+	float z_incr = CAMERA_POSN_INCR*sin(D2R(-theta));
+	new_posn->y = camera_position.y;
 
-	// Draw the square.
-	glBegin(GL_QUADS);
-
-	glNormal3f(0.0, 1.0, 0.0);
-	glVertex3f(1.0, 0.0, 1.0);
-	glVertex3f(-1.0, 0.0, 1.0);
-	glVertex3f(-1.0, 0.0, -1.0);
-	glVertex3f(1.0, 0.0, -1.0);
-
-	glEnd();
+	if (dir == Forward) {
+		new_posn->x = camera_position.x+x_incr;
+		new_posn->z = camera_position.z+z_incr;
+	} else {
+		new_posn->x = camera_position.x-x_incr;
+		new_posn->z = camera_position.z-z_incr;
+	}
 }
 
-void draw_floor() {
-	glMatrixMode(GL_MODELVIEW);
-	glPushMatrix();
-	glTranslatef(maze_height/2.0, 0.0, maze_width/2.0);
-	glScalef(maze_height/2.0, 1.0, maze_width/2.0);
-    // draw_square(&blue_plastic);
-	glPopMatrix();
-}
-
-/** Draw the maze by first drawing the west and south exterior walls, then
- * drawing any north or east walls of each cell.
+/** Check if a point collides with any walls.
+ *
+ * @param posn the point for which to check collision.
+ * @return true if <code>posn</code> collides with any walls, false otherwise.
  */
-void draw_maze() {
-	debug("draw_maze()");
-	
-	glMatrixMode(GL_MODELVIEW);
+bool is_collision(point3_t *posn) {    
+    // Get the cell in which posn is located.
+    int r = floor(posn->x);
+    int c = floor(posn->z);
+    cell_t *cell = get_cell(maze, r, c);
 
-	// Draw the start and end cell markers.
-	draw_start_end();
-
-	// Draw the breadcrumbs.
-	draw_breadcrumbs();	
-
-	// Draw the floor.
-	draw_floor();
-	
-	// Draw the west and south exterior walls. 
-	glPushMatrix();
-	glTranslatef(maze_height/2.0, 0.5, 0.0);
-	glScalef(maze_height+0.25, 1.0, 1.0);
-	draw_wall();
-	glPopMatrix();
-	glPushMatrix();
-	glTranslatef(0.0, 0.5, maze_width/2.0);
-	glScalef(1.0, 1.0, maze_width+0.25);
-	glRotatef(90, 0.0, 1.0, 0.0);
-	draw_wall();
-	glPopMatrix();
-
-	// Draw any north or east walls of each cell.
-	for (int i=0; i<maze_width; i++) {
-		for (int j=0; j<maze_height; j++) {
-			if (has_wall(maze, get_cell(maze, j, i), NORTH)) {
-				glPushMatrix();
-				glTranslatef(j+1, 0.5, i+0.5);
-				glScalef(1.0, 1.0, 1.25);
-				glRotatef(90, 0.0, 1.0, 0.0);
-				draw_wall();
-				glPopMatrix();
+	// Iterate through all wall directions and check collision with each
+	// wall that this cell has. If posn collides with any of them,
+	// return true.
+	unsigned char current_dir;
+	point3_t closest_wall_pt = {0.0, NORM_HEIGHT, 0.0};
+	for (int i=0; i<NUM_WALL_DIRS; i++) {
+		current_dir = wall_dirs[i];
+		if (has_wall(maze, cell, current_dir)) {
+			switch(current_dir) {
+				case NORTH:
+					closest_wall_pt.x = cell->r+1-WALL_THICKNESS/2;
+					closest_wall_pt.z = posn->z;
+					break;
+				case SOUTH:
+					closest_wall_pt.x = cell->r+WALL_THICKNESS/2;
+					closest_wall_pt.z = posn->z;
+					break;
+				case EAST:
+					closest_wall_pt.x = posn->x;
+					closest_wall_pt.z = cell->c+1-WALL_THICKNESS/2;
+					break;
+				case WEST:
+					closest_wall_pt.x = posn->x;
+					closest_wall_pt.z = cell->c+WALL_THICKNESS/2;
 			}
-			if (has_wall(maze, get_cell(maze, j, i), EAST)) {
-				glPushMatrix();
-				glTranslatef(j+0.5, 0.5, i+1);
-				glScalef(1.25, 1.0, 1.0);
-				draw_wall();
-				glPopMatrix();
-			}
+			if (dist(posn, &closest_wall_pt) < COLLISION_THRESHOLD)
+				return true;
 		}
 	}
-}
-	
-/* Draw a string at the current raster position.
- * 
- *@param the_string the string to display.
- */
-void draw_string(char *the_string) {
-	for (int i=0; i<strlen(the_string); i++) {
-		glutBitmapCharacter(GLUT_BITMAP_HELVETICA_12, the_string[i]);
-	}
+	// We've checked all the walls without returning, so
+	// there are no collisions.
+	return false;
 }
 
-/** Draw a green square marker on the start cell and a red one on the end cell.
+/** Determine whether or not a given cell in the maze has been visted.
+ *
+ * @param r the row of the cell.
+ * @param c the column of the cell.
  */
-void draw_start_end() {
-	glPushMatrix();
-	glTranslatef(start->r+0.5, 0.0, start->c+0.5);
-	glScalef(0.5, 0.0, 0.5);
-	draw_square(&bright_green);
-	glPopMatrix();
-	
-	glPushMatrix();
-	glTranslatef(end->r+0.5, 0.0, end->c+0.5);
-	glScalef(0.5, 0.0, 0.5);
-	draw_square(&bright_red);
-	glPopMatrix();
-}
-
-/** Draw square markers on the floor of all visited cells.
- */
-void draw_breadcrumbs() {
-	glMatrixMode(GL_MODELVIEW);
-
-	for (int i=0; i<maze_width; i++) {
-		for (int j=0; j<maze_height; j++) {
-			if (is_visited(j, i)) {
-				glPushMatrix();
-				glTranslatef(j+.5, 0.0, i+.5);
-				glScalef(.25, 1.0, .25);
-				draw_square(&bright_gold);
-				glPopMatrix();
-			}
-		}
-	}
+bool is_visited(int r, int c) {
+	return *(visited+r*maze_height+c);
 }
 
 /** Print the position (camera_position) and heading (theta) of the player.
@@ -740,23 +672,70 @@ void print_position_heading() {
 	free(s);
 }
 
-/** Determine whether or not a given cell in the maze has been visted.
- *
- * @param r the row of the cell.
- * @param c the column of the cell.
+/** Determine if the current cell is a newly visited cell. If so, and it is not
+ * the start nor end cell, set it as visited so that a breadcrumb will be
+ * drawn on it.
  */
-bool is_visited(int r, int c) {
-	return *(visited+r*maze_height+c);
+void process_cell() {
+	// Get the current cell.
+	int r = floor(camera_position.x);
+	int c = floor(camera_position.z);
+	cell_t *cell = get_cell(maze, r, c);
+	
+	// If this is a newly visited cell that isn't the start or end cell, 
+	// set it as visited.
+	if (!is_visited(r, c) && cell_cmp(cell, start) != 0 && 
+			cell_cmp(cell, end) != 0) { 
+		set_visited(r, c);
+	}
 }
 
-/** Mark a cell as visited.
- *
- * @param r the row of the cell.
- * @param c the column of the cell.
+/** Set the camera transform. The viewpoint is given by the eye coordinates,
+ * and we look in angle theta-90 around the y-axis (theta is the angle the
+ * view direction makes with the x-axis).
  */
-void set_visited(int r, int c) {
-	debug("set_visited()");
-	*(visited+r*maze_height+c) = true;
+void set_camera() {
+	debug("set_camera()");
+
+    // Set the camera transform.
+	glMatrixMode(GL_MODELVIEW);
+	glLoadIdentity();
+    glRotatef(360-(theta-90), 0.0, 1.0, 0.0);
+    glTranslatef(-camera_position.x, -camera_position.y, -camera_position.z);
+}
+
+/** Set the look-at point for a jump animation. We look at a point that is
+ * 1 unit away from the current camera position in the view direction (theta).
+ */
+void set_jump_look_at() {
+	jump_look_at.x = camera_position.x + cos(D2R(theta));
+	jump_look_at.y = camera_position.y;
+	jump_look_at.z = camera_position.z + sin(D2R(-theta));
+}
+
+/** Set the light colors.  Since the position of the light
+ *  is subject to the current model-view transform, and we have
+ *  specified the light position in world-frame coordinates,
+ *  we want to set the light position after setting the camera
+ *  transformation; since the camera transformation may change in response
+ *  to keyboard events, we ensure this by setting the light position
+ *  in the display callback.
+ */
+void set_lights() {
+    debug("set_lights()");
+
+    // Positions
+    glLightfv(GL_LIGHT0, GL_POSITION, far_light.position);
+    
+    // Directions
+    glLightfv(GL_LIGHT0, GL_SPOT_DIRECTION, far_light.direction);
+
+    // Colors
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, far_light.color);
+    glLightfv(GL_LIGHT0, GL_AMBIENT, BLACK);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, far_light.color);
+    
+    glLightf(GL_LIGHT0, GL_SPOT_CUTOFF, 75);
 }
 
 /** Set a material as the current material.
@@ -770,11 +749,40 @@ void set_material(material_t *material) {
 
 }
 
-/** Set the look-at point for a jump animation.
+/** Set the projection and viewport transformations.  We use perspective
+ *  projection and always match the aspect ratio of the screen window
+ *  with vertical field-of-view 60 degrees and always map to the entire
+ *  screen window.
  */
-void set_jump_look_at() {
-	jump_look_at.x = camera_position.x + cos(D2R(theta));
-	jump_look_at.y = camera_position.y;
-	jump_look_at.z = camera_position.z + sin(D2R(-theta));
+void set_projection_viewport() {
+    debug("set_projection_viewport");
+    
+	// Set perspective projection transform.
+	glMatrixMode(GL_PROJECTION);
+	glLoadIdentity();
+	gluPerspective(60.0, (GLdouble)win_width/win_height, view_plane_near,
+			view_plane_far);
+
+	// Set the viewport transform.
+	glViewport(0, 0, win_width, win_height);	
+}
+
+/** Mark a cell as visited.
+ *
+ * @param r the row of the cell.
+ * @param c the column of the cell.
+ */
+void set_visited(int r, int c) {
+	debug("set_visited()");
+	*(visited+r*maze_height+c) = true;
+}
+
+void draw_floor() {
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+	glTranslatef(maze_height/2.0, 0.0, maze_width/2.0);
+	glScalef(maze_height/2.0, 1.0, maze_width/2.0);
+    // draw_square(&blue_plastic);
+	glPopMatrix();
 }
 
