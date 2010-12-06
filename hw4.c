@@ -49,11 +49,9 @@ vector3_t up_dir = {0.0, 1.0, 0.0};
 #define JUMP_INCR 0.1
 #define NORM_HEIGHT 0.75
 #define JUMP_HEIGHT 19.5
-#define COLLISION_THRESHOLD 0.25f
+#define COLLISION_THRESHOLD 0.1f
 
 #define D2R(x) ((x)*M_PI/180.0)
-
-#define MALLOC1(t) (t *)(malloc(sizeof(t)))
 
 // The maze and associated data.
 maze_t *maze;
@@ -62,6 +60,9 @@ int maze_height;
 cell_t *start;
 cell_t *end;
 bool *visited;
+unsigned char wall_dirs[] = {NORTH, SOUTH, EAST, WEST};
+#define NUM_WALL_DIRS 4
+#define WALL_THICKNESS .25
 
 // View-volume specification in camera frame basis.
 float view_plane_near = 0.1f;
@@ -75,6 +76,11 @@ typedef struct _material_t {
 	GLfloat phong_exp;
 } material_t;
 
+typedef enum _movement_dir_t {
+    Forward,
+    Backward
+} movement_dir_t;
+
 // Material setting function.
 void set_material(material_t*);
 
@@ -83,16 +89,6 @@ typedef struct _light_t {
 	GLfloat color[4];
 } light_t;
 
-// Used for collision detection.
-typedef enum {
-    Forward,
-    Backward
-} Movement_Direction;
-
-typedef struct {
-    float x;
-    float z;
-} point2_t;
 
 GLfloat BLACK[4] = {0.0, 0.0, 0.0, 1.0};
 
@@ -146,6 +142,7 @@ void draw_start_end();
 void draw_breadcrumbs();
 void draw_maze();
 void draw_string(char*);
+void get_new_posn(movement_dir_t, point3_t*);
 void animate_jump();
 void animate_fall();
 void print_position_heading();
@@ -156,12 +153,9 @@ void set_lights();
 void set_jump_look_at();
 void set_camera();
 void set_projection_viewport();
-cell_t* get_current_cell();
-bool check_collision(Movement_Direction dir);
-float get_distance(point2_t* a, point2_t* b);
+bool is_collision(point3_t*);
 
 int main(int argc, char **argv) {
-	
 	// Parse the width and height of the maze.
 	maze_width = atoi(argv[1]);
 	maze_height = atoi(argv[2]);
@@ -200,7 +194,6 @@ int main(int argc, char **argv) {
  * printing the player's position and heading.
  */
 void handle_display() {
-
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Note that the lights are sent through the pipeline, and a light's
@@ -230,7 +223,6 @@ void handle_display() {
  *  @param y the mouse y-position when <code>key</code> was pressed.
  */
 void handle_key_norm(unsigned char key, int x, int y) {
-
 	debug("handle_key_norm()");
 
     if (key == ' ') {
@@ -241,54 +233,49 @@ void handle_key_norm(unsigned char key, int x, int y) {
     }
 }
 
-bool check_collision(Movement_Direction dir) {    
-    // Calculate where the camera will be after moving in Direction dir.
-    point2_t increment;
-    increment.x = CAMERA_POSN_INCR * cos(D2R(theta));
-    increment.z = CAMERA_POSN_INCR * sin(D2R(-theta));
-    if (dir == Backward) {
-        increment.x *= -1;
-        increment.z *= -1;
-    }
-    point2_t new_position;
-    new_position.x = camera_position.x + increment.x;
-    new_position.z = camera_position.z + increment.z;
-    
-    // Get the cell specified by the new position.
-    int new_r = floor(new_position.x);
-    int new_c = floor(new_position.z);
-    cell_t *new_cell = get_cell(maze, new_r, new_c);
-    
-    unsigned char possible_walls[] = {NORTH, EAST, SOUTH, WEST};
-    int possible_walls_length = 4;
-    for (int i = 0; i < possible_walls_length; i++) {
-        unsigned char current_wall = possible_walls[i];
-        if (has_wall(maze, new_cell, current_wall)) {
-                point2_t wall_point;
-            switch (current_wall) {
-                case NORTH:
-                    wall_point.x = new_cell->r + 1;
-                    wall_point.z = new_position.z;
-                    break;
-                case EAST:
-                    wall_point.x = new_position.x;
-                    wall_point.z = new_cell->c + 1;
-                    break;
-                case SOUTH:
-                    wall_point.x = new_cell->r;
-                    wall_point.z = new_position.z;
-                    break;
-                case WEST:
-                    wall_point.x = new_position.x;
-                    wall_point.z = new_cell->c;
-                    break;
-            }
-            if (get_distance(&wall_point, &new_position) <
-                    COLLISION_THRESHOLD) {
-                return false;
-            }
-        }
-    }
+/** Check if a point collides with any walls.
+ *
+ * @param posn the point for which to check collision.
+ * @return true if the point collides with any walls, false otherwise.
+ */
+bool is_collision(point3_t *posn) {    
+    // Get the cell in which posn is located.
+    int r = floor(posn->x);
+    int c = floor(posn->z);
+    cell_t *cell = get_cell(maze, r, c);
+
+	// Iterate through all wall directions and check collision with each
+	// wall that this cell has. If posn collides with any of them,
+	// return true.
+	unsigned char current_dir;
+	point3_t closest_wall_pt = {0.0, NORM_HEIGHT, 0.0};
+	for (int i=0; i<NUM_WALL_DIRS; i++) {
+		current_dir = wall_dirs[i];
+		if (has_wall(maze, cell, current_dir)) {
+			switch(current_dir) {
+				case NORTH:
+					closest_wall_pt.x = cell->r+1-WALL_THICKNESS;
+					closest_wall_pt.z = posn->z;
+					break;
+				case SOUTH:
+					closest_wall_pt.x = cell->r+WALL_THICKNESS;
+					closest_wall_pt.z = posn->z;
+					break;
+				case EAST:
+					closest_wall_pt.x = posn->x;
+					closest_wall_pt.z = cell->c+1-WALL_THICKNESS;
+					break;
+				case WEST:
+					closest_wall_pt.x = posn->x;
+					closest_wall_pt.z = cell->c+WALL_THICKNESS;
+			}
+			if (dist(posn, &closest_wall_pt) < COLLISION_THRESHOLD)
+				return true;
+		}
+	}
+	// We've checked all the walls without returning, so
+	// there are no collisions.
+	return false;
 }
 
 /** Handle keyboard events when in the normal maze view:
@@ -303,7 +290,6 @@ bool check_collision(Movement_Direction dir) {
  *	@param y the mouse y-position when <code>key</code> was pressed.
  */
 void handle_special_key(int key, int x, int y) {
-
 	switch (key) {
 		case GLUT_KEY_LEFT:
 			theta += EYE_THETA_INCR;
@@ -313,27 +299,48 @@ void handle_special_key(int key, int x, int y) {
 			theta -= EYE_THETA_INCR;
 		    if (theta < 0) theta += 360;
 			break;
-		case GLUT_KEY_UP:
-            if (check_collision(Forward)) {
-			    camera_position.x += CAMERA_POSN_INCR * cos(D2R(theta));
-    			camera_position.z += CAMERA_POSN_INCR * sin(D2R(-theta));
-            }
+		case GLUT_KEY_UP: {
+			point3_t new_posn;
+			get_new_posn(Forward, &new_posn);
+            if (!is_collision(&new_posn))
+				camera_position = new_posn;
 			break;
-		case GLUT_KEY_DOWN:
-		    if (check_collision(Backward)) {
-			    camera_position.x -= CAMERA_POSN_INCR * cos(D2R(theta));
-    			camera_position.z -= CAMERA_POSN_INCR * sin(D2R(-theta));
-		    }
+		}
+		case GLUT_KEY_DOWN: {
+			point3_t new_posn;
+			get_new_posn(Backward, &new_posn);
+		    if (!is_collision(&new_posn))
+				camera_position = new_posn;
 			break;
+		}
 		default:
 			break;
 	}
 
 	process_cell();
-	
 	set_camera();
-
 	glutPostRedisplay();
+}
+
+/** Set a <code>point3_t</code> representing the result of moving the camera
+ * <code>CAMERA_POSN_INCR</code> forward or backward.
+ *
+ * @param dir the direction.
+ * @param new_posn the <code>point3_t</code> to be filled in with the result of
+ *		moving <code>CAMERA_POSN_INCR</code> in direction <code>dir</code>.
+ */
+void get_new_posn(movement_dir_t dir, point3_t *new_posn) {
+	float x_incr = CAMERA_POSN_INCR*cos(D2R(theta));
+	float z_incr = CAMERA_POSN_INCR*sin(D2R(-theta));
+	new_posn->y = camera_position.y;
+
+	if (dir == Forward) {
+		new_posn->x = camera_position.x+x_incr;
+		new_posn->z = camera_position.z+z_incr;
+	} else {
+		new_posn->x = camera_position.x-x_incr;
+		new_posn->z = camera_position.z-z_incr;
+	}
 }
 
 /** Determine if the current cell is the end cell or if it is a newly visited
@@ -669,8 +676,7 @@ void draw_maze() {
 	
 /* Draw a string at the current raster position.
  * 
- * Parameters:
- *		the_string - The string to display.
+ *@param the_string the string to display.
  */
 void draw_string(char *the_string) {
 	for (int i=0; i<strlen(the_string); i++) {
@@ -751,6 +757,8 @@ void set_visited(int r, int c) {
 }
 
 /** Set a material as the current material.
+ *
+ * @param material the material to set as the current material.
  */
 void set_material(material_t *material) {
     glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, material->diffuse);
@@ -767,6 +775,3 @@ void set_jump_look_at() {
 	jump_look_at.z = camera_position.z + sin(D2R(-theta));
 }
 
-float get_distance(point2_t* a, point2_t* b) {
-    return sqrt(pow(b->x - a->x, 2) + pow(b->z - a->z, 2));
-}
