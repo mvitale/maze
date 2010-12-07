@@ -100,7 +100,7 @@ material_t blue_plastic = {
 
 //Materials for the marker squares on the floor. We want them to be bright
 //regardless of the lighting conditions, so we give them high diffuse component
-//values.
+//values and set the other component values to zero.
 material_t bright_gold = {
 	{0.0f, 0.0f, 0.0f, 1.0f},
 	{10.0f, 10.0f, 0.0f, 1.0f},
