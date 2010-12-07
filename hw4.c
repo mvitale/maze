@@ -378,7 +378,7 @@ void init() {
 	end = get_end(maze);
 	visited = calloc(maze_width*maze_height, sizeof(bool));
 
-	// Viewpoint position.
+	// Camera position and angle.
     theta = 0;
     camera_position.x = start->r+0.5;
     camera_position.y = NORM_HEIGHT;
@@ -418,7 +418,8 @@ void draw_breadcrumbs() {
 }
 
 /** Draw the maze by first drawing the west and south exterior walls, then
- * drawing any north or east walls of each cell.
+ * drawing any north or east walls of each cell. We also draw the appropriate
+ * floor markers on the start, end, and visited cells.
  */
 void draw_maze() {
 	debug("draw_maze()");
@@ -468,7 +469,7 @@ void draw_maze() {
 
 /** Draw a sqaure of side length 2 in the xz plane centered at the origin
  *
- * @param material the material to use.
+ * @param material the material to use for the square.
  */
 void draw_square(material_t *material) {
 	// Specify the material for the square.
