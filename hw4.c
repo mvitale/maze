@@ -249,7 +249,7 @@ void handle_display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     // Light position.
-    glLightfv(GL_LIGHT0, GL_POSITION, far_light.position)
+    glLightfv(GL_LIGHT0, GL_POSITION, far_light.position);
     
 	// Display the maze.
 	draw_maze();
