@@ -136,6 +136,7 @@ void handle_key_norm(unsigned char, int, int);
 void handle_key_jumped(unsigned char, int, int);
 void handle_resize(int, int);
 void handle_special_key(int, int, int);
+void animate_end();
 
 // Initialization functions.
 void gl_init();
@@ -160,6 +161,7 @@ void set_lights();
 void set_material(material_t*);
 void set_projection_viewport();
 void set_visited(int, int);
+void reached_end();
 
 // XXX: SHOULD WE KEEP THIS??? AT THE VERY LEAST WE NEED TO CHANGE THE MATERIAL
 void draw_floor();
@@ -325,6 +327,7 @@ void handle_special_key(int key, int x, int y) {
 			get_new_posn(Forward, &new_posn);
             if (!is_collision(&new_posn))
 				camera_position = new_posn;
+			process_cell();
 			break;
 		}
 		case GLUT_KEY_DOWN: {
@@ -332,13 +335,12 @@ void handle_special_key(int key, int x, int y) {
 			get_new_posn(Backward, &new_posn);
 		    if (!is_collision(&new_posn))
 				camera_position = new_posn;
+			process_cell();
 			break;
 		}
 		default:
 			break;
 	}
-
-	process_cell();
 	set_camera();
 	glutPostRedisplay();
 }
@@ -687,10 +689,34 @@ void process_cell() {
 	
 	// If this is a newly visited cell that isn't the start or end cell, 
 	// set it as visited.
-	if (!is_visited(r, c) && cell_cmp(cell, start) != 0 && 
-			cell_cmp(cell, end) != 0) { 
+	if (cell_cmp(cell, end) == 0) {
+        reached_end();
+	}
+	else if (!is_visited(r, c) && cell_cmp(cell, start) != 0) { 
 		set_visited(r, c);
 	}
+}
+
+// Method called when player reaches the end of the maze.
+void reached_end() {
+    glutKeyboardFunc(NULL);
+    glutSpecialFunc(NULL);
+
+    glutIdleFunc(animate_end);
+}
+
+// Maze ending animation.
+void animate_end() {
+    if (camera_position.y >= 50.0) {
+        glutIdleFunc(NULL);
+    }
+    // Spin camera around and lift it up.
+    theta += 1;
+    if (theta >= 360) theta -= 360;
+    camera_position.y += 0.001;
+    
+    set_camera();
+    glutPostRedisplay();
 }
 
 /** Set the camera transform. The viewpoint is given by the eye coordinates,
@@ -741,7 +767,6 @@ void set_material(material_t *material) {
     glMaterialfv(GL_FRONT, GL_AMBIENT_AND_DIFFUSE, material->diffuse);
     glMaterialfv(GL_FRONT, GL_SPECULAR, material->specular);
     glMaterialf(GL_FRONT, GL_SHININESS, material->phong_exp);
-
 }
 
 /** Set the projection and viewport transformations.  We use perspective
