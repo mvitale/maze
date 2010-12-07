@@ -6,8 +6,6 @@
  *  mvitale@wesleyan.edu
  */
 
-#include <assert.h>
-#include <float.h>
 #include <math.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -76,10 +74,6 @@ typedef struct _material_t {
 	GLfloat phong_exp;
 } material_t;
 
-typedef enum _movement_dir_t {
-    Forward,
-    Backward
-} movement_dir_t;
 
 typedef struct _light_t {
 	GLfloat position[4];
@@ -128,6 +122,12 @@ material_t bright_red = {
 	0.0f
 };
 
+// A representation of forward and backward directions.
+typedef enum _movement_dir_t {
+    Forward,
+    Backward
+} movement_dir_t;
+
 // Callbacks.
 void animate_jump();
 void animate_fall();
@@ -160,9 +160,6 @@ void set_lights();
 void set_material(material_t*);
 void set_projection_viewport();
 void set_visited(int, int);
-
-// XXX: SHOULD WE KEEP THIS??? AT THE VERY LEAST WE NEED TO CHANGE THE MATERIAL
-void draw_floor();
 
 int main(int argc, char **argv) {	
 	// Parse the width and height of the maze.
@@ -265,8 +262,7 @@ void handle_display() {
 /** Handle keyboard events when in the normal in-maze view:
  *  
  *  - SPACE: Animate jumping to an overhead view of the maze. Movement 
- *			 is	disabled
- *			 until the player switches back to the in-maze view.
+ *			 is	disabled until the player switches back to the in-maze view.
  *
  *  @param key the key that was pressed.
  *  @param x the mouse x-position when <code>key</code> was pressed.
@@ -294,7 +290,6 @@ void handle_key_norm(unsigned char key, int x, int y) {
 void handle_key_jumped(unsigned char key, int x, int y) {
 	debug("handle_key_jumped");
 	if (key == ' ') {
-		debug("Space pressed");
 		glutIdleFunc(animate_fall);
 	}
 }
@@ -343,7 +338,8 @@ void handle_special_key(int key, int x, int y) {
 	glutPostRedisplay();
 }
 
-/** Handle a resize event by recording the new width and height.
+/** Handle a resize event by recording the new width and height and requesting
+ * a redisplay.
  *  
  *  @param width the new width of the window.
  *  @param height the new height of the window.
@@ -357,12 +353,9 @@ void handle_resize(int width, int height) {
     glutPostRedisplay();
 }
 
-
-
-
 // INITIALIZATION FUNCTIONS
 
-/** Basic GL initialization.
+/** GL initialization.
  */
 void gl_init() {
 	glEnable(GL_NORMALIZE);
@@ -371,8 +364,6 @@ void gl_init() {
 	glCullFace(GL_FRONT);
 	glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
-    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
-    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, global_ambient);
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
@@ -381,11 +372,11 @@ void gl_init() {
 void init() {
     debug("init()");
 
+	// Initialize the maze and set associated data.
 	initialize_maze();
+	start = get_start(maze);
+	end = get_end(maze);
 	visited = calloc(maze_width*maze_height, sizeof(bool));
-	debug("total cells: %d", maze_width*maze_height);
-
-	cell_t *start = get_start(maze);
 
 	// Viewpoint position.
     theta = 0;
@@ -400,13 +391,10 @@ void init() {
 	set_lights();
 }
 
-/*  Initialize the maze by building all possible walls and set the global
- *  start and end cell pointers.
+/*  Initialize the maze by building all possible walls.
  */
 void initialize_maze() {
     maze = make_maze(maze_height, maze_width, time(NULL));
-	start = get_start(maze);
-	end = get_end(maze);
 }
 
 // APPLICATION FUNCTIONS
@@ -618,25 +606,26 @@ bool is_collision(point3_t *posn) {
 	// return true.
 	unsigned char current_dir;
 	point3_t closest_wall_pt = {0.0, NORM_HEIGHT, 0.0};
+	float half_thickness = WALL_THICKNESS/2;
 	for (int i=0; i<NUM_WALL_DIRS; i++) {
 		current_dir = wall_dirs[i];
 		if (has_wall(maze, cell, current_dir)) {
 			switch(current_dir) {
 				case NORTH:
-					closest_wall_pt.x = cell->r+1-WALL_THICKNESS/2;
+					closest_wall_pt.x = cell->r+1-half_thickness;
 					closest_wall_pt.z = posn->z;
 					break;
 				case SOUTH:
-					closest_wall_pt.x = cell->r+WALL_THICKNESS/2;
+					closest_wall_pt.x = cell->r+half_thickness;
 					closest_wall_pt.z = posn->z;
 					break;
 				case EAST:
 					closest_wall_pt.x = posn->x;
-					closest_wall_pt.z = cell->c+1-WALL_THICKNESS/2;
+					closest_wall_pt.z = cell->c+1-half_thickness;
 					break;
 				case WEST:
 					closest_wall_pt.x = posn->x;
-					closest_wall_pt.z = cell->c+WALL_THICKNESS/2;
+					closest_wall_pt.z = cell->c+half_thickness;
 			}
 			if (dist(posn, &closest_wall_pt) < COLLISION_THRESHOLD)
 				return true;
@@ -651,12 +640,13 @@ bool is_collision(point3_t *posn) {
  *
  * @param r the row of the cell.
  * @param c the column of the cell.
+ * @return true if the cell has been visited, false otherwise.
  */
 bool is_visited(int r, int c) {
 	return *(visited+r*maze_height+c);
 }
 
-/** Print the position (camera_position) and heading (theta) of the player.
+/** Display the position (camera_position) and heading (theta) of the player.
  */
 void print_position_heading() {
 	debug("print_position_heading()");
@@ -708,7 +698,7 @@ void set_camera() {
 }
 
 /** Set the look-at point for a jump animation. We look at a point that is
- * 1 unit away from the current camera position in the view direction (theta).
+ * 1 unit away from the current camera position in the view direction.
  */
 void set_jump_look_at() {
 	jump_look_at.x = camera_position.x + cos(D2R(theta));
@@ -716,7 +706,7 @@ void set_jump_look_at() {
 	jump_look_at.z = camera_position.z + sin(D2R(-theta));
 }
 
-/** Set the light colors.  Since the position of the light
+/** Set the light colors. Since the position of the light
  *  is subject to the current model-view transform, and we have
  *  specified the light position in world-frame coordinates,
  *  we want to set the light position after setting the camera
@@ -726,6 +716,10 @@ void set_jump_look_at() {
  */
 void set_lights() {
     debug("set_lights()");
+
+	// Set the lighting model.
+    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
+    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, global_ambient);
 
     // Colors
     glLightfv(GL_LIGHT0, GL_DIFFUSE, far_light.color);
