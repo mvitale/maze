@@ -85,19 +85,18 @@ typedef enum _movement_dir_t {
 
 typedef struct _light_t {
 	GLfloat position[4];
+    GLfloat direction[3];
 	GLfloat color[4];
 } light_t;
 
+
 GLfloat BLACK[4] = {0.0, 0.0, 0.0, 1.0};
 
-// Spot light
 light_t far_light = {
-    {2.0, 20.0, 2.0, 1.0},
-    {0.75, 0.75, 0.75, 1.0}
+    {2.0, 20.0, 2.0, 1.0}, // position
+    {0.4, -1.0, 0.4}, // direction
+    {1.0, 1.0, 1.0, 1.0} // color
 };
-
-// Ambient light
-GLfloat global_ambient[] = {0.5f, 0.5f, 0.5f, 1.0f};
 
 material_t blue_plastic = {
     {0.0f, 0.0f, 1.0f, 1.0f},
@@ -248,9 +247,6 @@ void animate_jump() {
 void handle_display() {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Light position.
-    glLightfv(GL_LIGHT0, GL_POSITION, far_light.position)
-    
 	// Display the maze.
 	draw_maze();
 
@@ -370,8 +366,7 @@ void gl_init() {
 	glCullFace(GL_FRONT);
 	glEnable(GL_LIGHTING);
     glEnable(GL_LIGHT0);
-    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 1);
-    glLightModelfv(GL_LIGHT_MODEL_AMBIENT, global_ambient);
+    glLightModeli(GL_LIGHT_MODEL_LOCAL_VIEWER, 0);
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 }
 
@@ -729,10 +724,18 @@ void set_jump_look_at() {
 void set_lights() {
     debug("set_lights()");
 
+    // Positions
+    glLightfv(GL_LIGHT0, GL_POSITION, far_light.position);
+    
+    // Directions
+    glLightfv(GL_LIGHT0, GL_SPOT_DIRECTION, far_light.direction);
+
     // Colors
     glLightfv(GL_LIGHT0, GL_DIFFUSE, far_light.color);
     glLightfv(GL_LIGHT0, GL_AMBIENT, BLACK);
     glLightfv(GL_LIGHT0, GL_SPECULAR, far_light.color);
+    
+    glLightf(GL_LIGHT0, GL_SPOT_CUTOFF, 75);
 }
 
 /** Set a material as the current material.
