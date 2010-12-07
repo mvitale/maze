@@ -644,7 +644,7 @@ bool is_collision(point3_t *posn) {
  * @return true if the cell has been visited, false otherwise.
  */
 bool is_visited(int r, int c) {
-	return *(visited+r*maze_height+c);
+	return *(visited+r*maze_width+c);
 }
 
 /** Display the position (camera_position) and heading (theta) of the player.
@@ -764,6 +764,6 @@ void set_projection_viewport() {
  */
 void set_visited(int r, int c) {
 	debug("set_visited()");
-	*(visited+r*maze_height+c) = true;
+	*(visited+r*maze_width+c) = true;
 }
 
