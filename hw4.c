@@ -49,9 +49,9 @@ vector3_t up_dir = {0.0, 1.0, 0.0};
 #define JUMP_INCR 0.1
 #define NORM_HEIGHT 0.75
 #define JUMP_HEIGHT 19.5
-#define COLLISION_THRESHOLD 0.1f
+#define COLLISION_THRESHOLD 0.15f
 
-#define D2R(x) ((x)*M_PI/180.0)
+#define D2R(x) ((x)*M_PI/180.0)		//Convert degrees to radians.
 
 // The maze and associated data.
 maze_t *maze;
@@ -81,8 +81,6 @@ typedef enum _movement_dir_t {
     Backward
 } movement_dir_t;
 
-// Material setting function.
-
 typedef struct _light_t {
 	GLfloat position[4];
 	GLfloat color[4];
@@ -106,6 +104,9 @@ material_t blue_plastic = {
     1000.0f
 };
 
+//Materials for the marker squares on the floor. We want them to be bright
+//regardless of the lighting conditions, so we give them high diffuse component
+//values.
 material_t bright_gold = {
 	{0.0f, 0.0f, 0.0f, 1.0f},
 	{10.0f, 10.0f, 0.0f, 1.0f},
@@ -442,9 +443,6 @@ void draw_maze() {
 	// Draw the breadcrumbs.
 	draw_breadcrumbs();	
 
-	// Draw the floor.
-	draw_floor();
-	
 	// Draw the west and south exterior walls. 
 	glPushMatrix();
 	glTranslatef(maze_height/2.0, 0.5, 0.0);
@@ -772,14 +770,5 @@ void set_projection_viewport() {
 void set_visited(int r, int c) {
 	debug("set_visited()");
 	*(visited+r*maze_height+c) = true;
-}
-
-void draw_floor() {
-	glMatrixMode(GL_MODELVIEW);
-	glPushMatrix();
-	glTranslatef(maze_height/2.0, 0.0, maze_width/2.0);
-	glScalef(maze_height/2.0, 1.0, maze_width/2.0);
-    // draw_square(&blue_plastic);
-	glPopMatrix();
 }
 
